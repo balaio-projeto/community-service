@@ -1,3 +1,14 @@
+server:
+  port: ${COMMUNITY_SERVICE_PORT:8084}
 spring:
   application:
     name: community-service
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
