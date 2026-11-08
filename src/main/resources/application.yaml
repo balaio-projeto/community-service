@@ -7,6 +7,13 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+balaio:
+  commerce-url: ${COMMERCE_SERVICE_URL:http://localhost:8083}
+  internal-token: ${BALAIO_INTERNAL_TOKEN:}
+  jwt:
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION:}
+    issuer: ${JWT_ISSUER:}
+    audience: ${JWT_AUDIENCE:}
 management:
   endpoints:
     web:

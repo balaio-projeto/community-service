@@ -17,4 +17,8 @@ No Windows: `.\mvnw.cmd spring-boot:run`. Testes: `.\mvnw.cmd test`.
 
 O `Dockerfile` constrói uma imagem própria. Em `platform`, use `docker compose up --build -d community-service` para iniciar este serviço e seu banco ou `docker compose --profile extended up --build -d` para iniciar todos. Health: `http://localhost:8084/actuator/health`.
 
-Crie migrações SQL versionadas em `src/main/resources/db/migration` quando o primeiro modelo persistente for implementado. As rotas públicas planejadas estão mapeadas no gateway; cada endpoint continua a ser implementado neste serviço conforme os contratos do frontend e da Fake API.
+## Mediação de pedidos (PI-190)
+
+Comprador autenticado cria `POST /api/v1/admin/mediacoes` com `pedido` (UUID), `assunto` e `relato`; o serviço consulta o commerce com o mesmo Bearer para validar a titularidade. Comprador lista somente as próprias mediações em `GET /api/v1/admin/mediacoes`; administrador lista todas, abre por `PATCH /api/v1/admin/mediacoes/{id}` com `estado: "emAnalise"` e decide por `POST /api/v1/admin/mediacoes/{id}/decisao` com `decisao: "cancelar_reembolsar" | "negar" | "manter_conversa"`.
+
+A decisão e seu UUID são persistidos antes do comando interno ao commerce. Em falha de rede, fica `decisao_pendente`; o worker tenta novamente com o mesmo identificador. O reembolso é apenas um resultado demonstrativo do pedido, sem movimentação financeira até existir provedor sandbox. Para testar com PostgreSQL 18 via Testcontainers: `$env:COMMUNITY_POSTGRES_TEST='true'; .\mvnw.cmd '-Djava.version=21' clean verify`.
