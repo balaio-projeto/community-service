@@ -58,6 +58,14 @@ O `Dockerfile` constrói uma imagem própria. Em `platform`, use `docker compose
 
 A existência e o dono da peça vêm do catalog (`GET /pecas/{slug}`, campo `artesao` = `artesao-<id da conta>`), repassando o token de quem chama para que o dono enxergue a própria peça mesmo antes de publicada. Peça inexistente → 404 `PECA_NAO_ENCONTRADA`; pergunta de outra peça → 404 `PERGUNTA_NAO_ENCONTRADA`; quem não é o dono → 403 `SEM_PERMISSAO`; catalog ou profile fora do ar → 503.
 
+## Coleções do usuário (PI-186 e PI-211)
+
+`GET` e `PUT /api/v1/estado/{colecao}` para `favoritos`, `historicoBusca`, `videosCurtidos` e `videosSalvos`, sempre do usuário do token. O `PUT` recebe o mesmo corpo da Fake API (`{ "favoritos": [...] }`) e devolve a lista gravada.
+
+- Itens repetidos e em branco são removidos mantendo a ordem, então a mesclagem local/remota no login pode mandar a união sem gerar duplicatas.
+- Favoritos guardam slugs de peça (até 200) e vídeos guardam IDs (até 500); acima do limite → 400. O histórico guarda as 20 buscas mais recentes (início da lista).
+- `sacola` continua no commerce; qualquer outra coleção → 404.
+
 ## Mediação de pedidos (PI-195)
 
 Comprador autenticado cria `POST /api/v1/admin/mediacoes` com `pedido` (UUID), `assunto` e `relato`; o serviço consulta o commerce com o mesmo Bearer para validar a titularidade (404 se o pedido não existe, 403 se não é do comprador, 503 se o commerce não responde). Comprador lista somente as próprias mediações em `GET /api/v1/admin/mediacoes`; administrador lista todas, coloca em análise por `PATCH /api/v1/admin/mediacoes/{id}` com `estado: "emAnalise"` e decide por `POST /api/v1/admin/mediacoes/{id}/decisao` com `decisao: "cancelar_reembolsar" | "negar" | "manter_conversa"`.
