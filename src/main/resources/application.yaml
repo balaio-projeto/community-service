@@ -12,14 +12,7 @@ balaio:
   catalog-url: ${CATALOG_SERVICE_URL:http://localhost:8081}
   profile-url: ${PROFILE_SERVICE_URL:http://localhost:8082}
   midia:
-    armazenamento: ${COMMUNITY_MIDIA_ARMAZENAMENTO:local}
     diretorio: ${COMMUNITY_MIDIA_DIR:./dados/midia}
-    s3:
-      endpoint: ${COMMUNITY_S3_ENDPOINT:}
-      regiao: ${COMMUNITY_S3_REGIAO:auto}
-      bucket: ${COMMUNITY_S3_BUCKET:}
-      chave-acesso: ${COMMUNITY_S3_CHAVE_ACESSO:}
-      chave-secreta: ${COMMUNITY_S3_CHAVE_SECRETA:}
   internal-token: ${BALAIO_INTERNAL_TOKEN:}
   jwt:
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION:}

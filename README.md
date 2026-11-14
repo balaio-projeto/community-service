@@ -49,7 +49,6 @@ O `Dockerfile` constrói uma imagem própria. Em `platform`, use `docker compose
 
 - `.\mvnw.cmd test`: domínio, casos de uso com portas em memória e controllers com segurança (MockMvc).
 - Integração com PostgreSQL 18 via Testcontainers (exige Docker): `$env:COMMUNITY_POSTGRES_TEST='true'; .\mvnw.cmd test`.
-- Adaptador S3 contra um SeaweedFS via Testcontainers (exige Docker): `$env:COMMUNITY_S3_TEST='true'; .\mvnw.cmd test`.
 
 ## Perguntas públicas (PI-185)
 
@@ -93,19 +92,7 @@ Quem participa é confirmado no commerce com o token de quem chama: o comprador 
 - `GET/POST /{id}/comentarios` com `{ texto }`: qualquer usuário autenticado comenta; `artesao: true` quando quem comenta é o dono do vídeo. O nome vem do profile.
 - `curtidas` é a contagem de usuários com o vídeo em `videosCurtidos`; `visualizacoes` ainda não é medida (0).
 
-### Armazenamento dos arquivos
-
-A porta `ArmazenamentoMidiaPort` tem dois adaptadores, escolhidos por `COMMUNITY_MIDIA_ARMAZENAMENTO`:
-
-| Valor | Uso | Variáveis |
-|---|---|---|
-| `local` (padrão) | Desenvolvimento e testes | `COMMUNITY_MIDIA_DIR` (padrão `./dados/midia`) |
-| `s3` | Produção no Cloudflare R2 (ou outro S3 compatível) | `COMMUNITY_S3_ENDPOINT` (R2: `https://<account-id>.r2.cloudflarestorage.com`), `COMMUNITY_S3_BUCKET`, `COMMUNITY_S3_CHAVE_ACESSO`, `COMMUNITY_S3_CHAVE_SECRETA`, `COMMUNITY_S3_REGIAO` (padrão `auto`) |
-
-- Os vídeos sempre **passam pelo community**: o bucket pode ficar privado, e a regra "rascunho só para o dono" vale também para os arquivos.
-- O `Range` é repassado ao storage. Pular para o meio do vídeo baixa só aquele trecho do R2.
-- O upload é gravado num temporário, com limite de tamanho, antes de ir ao bucket. Assim um envio cortado nunca vira objeto.
-- O contrato da API (`url`, `/arquivo`, `/capa`) é o mesmo nos dois modos.
+Os arquivos ficam em `COMMUNITY_MIDIA_DIR` (padrão `./dados/midia`), atrás da porta `ArmazenamentoMidiaPort`. Quando o storage S3 da PI-213 existir, basta um novo adaptador; o contrato da API não muda.
 
 ## Mediação de pedidos (PI-195)
 

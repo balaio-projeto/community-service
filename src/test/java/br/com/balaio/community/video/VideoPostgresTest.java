@@ -85,7 +85,7 @@ class VideoPostgresTest {
                 new ByteArrayInputStream(new byte[] { 0, 0, 0, 24 }), "0:48"), artesao);
         videos.alterar(id, new DadosVideo(null, null, null, null, "publicada"), artesao);
         assertThat(videos.listar(false, Optional.empty())).extracting(v -> v.video().id()).contains(id);
-        assertThat(videos.abrirMidia(id, TipoMidia.VIDEO, Optional.empty()).conteudo().tamanho()).isEqualTo(4);
+        assertThat(videos.abrirMidia(id, TipoMidia.VIDEO, Optional.empty()).conteudo().contentLength()).isEqualTo(4);
 
         comentarios.comentar(id, "Que lindo!", fa);
         colecoes.substituir(fa.id(), TipoColecao.VIDEOS_CURTIDOS, List.of(id.toString()));

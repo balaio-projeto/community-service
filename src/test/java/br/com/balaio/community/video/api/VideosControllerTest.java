@@ -5,13 +5,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.OffsetDateTime;
@@ -35,8 +31,6 @@ import br.com.balaio.community.shared.security.UsuarioAutenticadoArgumentResolve
 import br.com.balaio.community.video.application.ComentarioVideoService;
 import br.com.balaio.community.video.application.VideoService;
 import br.com.balaio.community.video.application.VideoService.VideoComNumeros;
-import br.com.balaio.community.video.application.port.out.ArmazenamentoMidiaPort;
-import br.com.balaio.community.video.domain.TipoMidia;
 import br.com.balaio.community.video.domain.Video;
 
 @WebMvcTest(VideosController.class)
@@ -62,55 +56,6 @@ class VideosControllerTest {
                 .andExpect(jsonPath("$.dados[0].comentarios").value(2))
                 .andExpect(jsonPath("$.dados[0].publicadoEm").value("Rascunho"))
                 .andExpect(jsonPath("$.dados[0].url").isEmpty());
-    }
-
-    @Test
-    void entregaSoOTrechoPedidoComRange() throws Exception {
-        UUID id = UUID.randomUUID();
-        when(videos.abrirMidia(eq(id), eq(TipoMidia.VIDEO), any())).thenReturn(midia("0123456789"));
-
-        var envio = mvc.perform(get("/api/v1/videos/" + id + "/arquivo").header("Range", "bytes=2-5"))
-                .andExpect(request().asyncStarted()).andReturn();
-        mvc.perform(asyncDispatch(envio))
-                .andExpect(status().isPartialContent())
-                .andExpect(header().string("Content-Range", "bytes 2-5/10"))
-                .andExpect(header().string("Accept-Ranges", "bytes"))
-                .andExpect(content().string("2345"));
-    }
-
-    @Test
-    void semRangeEntregaOArquivoInteiro() throws Exception {
-        UUID id = UUID.randomUUID();
-        when(videos.abrirMidia(eq(id), eq(TipoMidia.VIDEO), any())).thenReturn(midia("0123456789"));
-
-        var envio = mvc.perform(get("/api/v1/videos/" + id + "/arquivo")).andReturn();
-        mvc.perform(asyncDispatch(envio)).andExpect(status().isOk()).andExpect(content().string("0123456789"));
-    }
-
-    @Test
-    void rangeForaDoArquivoRetorna416() throws Exception {
-        UUID id = UUID.randomUUID();
-        when(videos.abrirMidia(eq(id), eq(TipoMidia.VIDEO), any())).thenReturn(midia("0123456789"));
-
-        mvc.perform(get("/api/v1/videos/" + id + "/arquivo").header("Range", "bytes=50-60"))
-                .andExpect(status().isRequestedRangeNotSatisfiable())
-                .andExpect(header().string("Content-Range", "bytes */10"));
-    }
-
-    private static VideoService.MidiaParaEntrega midia(String conteudo) {
-        byte[] bytes = conteudo.getBytes();
-        return new VideoService.MidiaParaEntrega(new ArmazenamentoMidiaPort.MidiaArmazenada() {
-            @Override
-            public long tamanho() {
-                return bytes.length;
-            }
-
-            @Override
-            public java.io.InputStream ler(long primeiroByte, long ultimoByte) {
-                return new java.io.ByteArrayInputStream(bytes, (int) primeiroByte,
-                        (int) (ultimoByte - primeiroByte + 1));
-            }
-        }, "video/mp4");
     }
 
     @Test

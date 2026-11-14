@@ -28,18 +28,6 @@ class ArmazenamentoLocalAdapterTest {
     }
 
     @Test
-    void leApenasOTrechoPedido() throws Exception {
-        var armazenamento = new ArmazenamentoLocalAdapter(raiz.toString());
-        armazenamento.gravar("video/c.mp4", new ByteArrayInputStream("0123456789".getBytes()), 100);
-
-        var midia = armazenamento.abrir("video/c.mp4").orElseThrow();
-        assertThat(midia.tamanho()).isEqualTo(10);
-        try (var trecho = midia.ler(3, 6)) {
-            assertThat(new String(trecho.readAllBytes())).isEqualTo("3456");
-        }
-    }
-
-    @Test
     void arquivoAcimaDoLimiteNaoDeixaRestos() throws Exception {
         var armazenamento = new ArmazenamentoLocalAdapter(raiz.toString());
 

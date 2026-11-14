@@ -5,9 +5,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.springframework.http.HttpHeaders;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.core.io.Resource;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -16,10 +18,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -98,18 +98,14 @@ public class VideosController {
 
     @GetMapping("/{id}/arquivo")
     @Operation(summary = "Reproduz o vídeo (aceita Range)")
-    public ResponseEntity<StreamingResponseBody> arquivo(@PathVariable UUID id,
-            @RequestHeader(value = HttpHeaders.RANGE, required = false) String range,
-            Optional<UsuarioAutenticado> usuario) {
-        return EntregaDeMidia.responder(videos.abrirMidia(id, TipoMidia.VIDEO, usuario), range);
+    public ResponseEntity<Resource> arquivo(@PathVariable UUID id, Optional<UsuarioAutenticado> usuario) {
+        return entregar(videos.abrirMidia(id, TipoMidia.VIDEO, usuario));
     }
 
     @GetMapping("/{id}/capa")
     @Operation(summary = "Imagem de capa do vídeo")
-    public ResponseEntity<StreamingResponseBody> capa(@PathVariable UUID id,
-            @RequestHeader(value = HttpHeaders.RANGE, required = false) String range,
-            Optional<UsuarioAutenticado> usuario) {
-        return EntregaDeMidia.responder(videos.abrirMidia(id, TipoMidia.CAPA, usuario), range);
+    public ResponseEntity<Resource> capa(@PathVariable UUID id, Optional<UsuarioAutenticado> usuario) {
+        return entregar(videos.abrirMidia(id, TipoMidia.CAPA, usuario));
     }
 
     @GetMapping("/{id}/comentarios")
@@ -131,6 +127,11 @@ public class VideosController {
             throws IOException {
         return new EnvioMidia(tipo, requisicao.getContentType(), requisicao.getContentLengthLong(),
                 requisicao.getInputStream(), duracao);
+    }
+
+    private static ResponseEntity<Resource> entregar(VideoService.MidiaParaEntrega midia) {
+        return ResponseEntity.ok().contentType(MediaType.parseMediaType(midia.tipoConteudo()))
+                .cacheControl(CacheControl.noCache()).body(midia.conteudo());
     }
 
     record NovoComentarioRequest(String texto) {
