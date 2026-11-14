@@ -1,0 +1,71 @@
+package br.com.balaio.community.mediacao.persistence;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Component;
+
+import br.com.balaio.community.mediacao.application.port.out.MediacoesPort;
+import br.com.balaio.community.mediacao.domain.Mediacao;
+import br.com.balaio.community.shared.exception.ConflitoException;
+import br.com.balaio.community.shared.exception.RecursoNaoEncontradoException;
+
+@Component
+class MediacoesPersistenceAdapter implements MediacoesPort {
+    private final SpringDataMediacaoRepository repositorio;
+
+    MediacoesPersistenceAdapter(SpringDataMediacaoRepository repositorio) {
+        this.repositorio = repositorio;
+    }
+
+    @Override
+    public boolean existeParaPedido(UUID pedidoId) {
+        return repositorio.existsByPedidoId(pedidoId);
+    }
+
+    @Override
+    public Mediacao registrar(Mediacao mediacao) {
+        try {
+            return repositorio.saveAndFlush(MediacaoJpaEntity.de(mediacao)).paraDominio();
+        } catch (DataIntegrityViolationException duplicada) {
+            throw new ConflitoException("MEDIACAO_EXISTENTE", "Já existe uma mediação para este pedido.");
+        }
+    }
+
+    @Override
+    public Mediacao atualizar(Mediacao mediacao) {
+        var entidade = repositorio.findById(mediacao.id())
+                .orElseThrow(() -> new RecursoNaoEncontradoException("MEDIACAO_NAO_ENCONTRADA",
+                        "Mediação não encontrada."));
+        entidade.copiarEstadoDe(mediacao);
+        return repositorio.save(entidade).paraDominio();
+    }
+
+    @Override
+    public Optional<Mediacao> buscar(UUID id) {
+        return repositorio.findById(id).map(MediacaoJpaEntity::paraDominio);
+    }
+
+    @Override
+    public Optional<Mediacao> buscarParaAtualizar(UUID id) {
+        return repositorio.buscarComBloqueio(id).map(MediacaoJpaEntity::paraDominio);
+    }
+
+    @Override
+    public List<Mediacao> listarTodas() {
+        return repositorio.findAllByOrderByCriadaEmDesc().stream().map(MediacaoJpaEntity::paraDominio).toList();
+    }
+
+    @Override
+    public List<Mediacao> listarDoComprador(UUID compradorId) {
+        return repositorio.findByCompradorIdOrderByCriadaEmDesc(compradorId).stream()
+                .map(MediacaoJpaEntity::paraDominio).toList();
+    }
+
+    @Override
+    public List<UUID> idsAguardandoEntrega(int maximoTentativas, int limite) {
+        return repositorio.idsAguardandoEntrega(maximoTentativas, limite);
+    }
+}
