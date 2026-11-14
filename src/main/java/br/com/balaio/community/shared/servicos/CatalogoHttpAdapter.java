@@ -1,4 +1,4 @@
-package br.com.balaio.community.pergunta.integration;
+package br.com.balaio.community.shared.servicos;
 
 import java.util.Optional;
 
@@ -11,15 +11,14 @@ import org.springframework.web.client.RestClientException;
 
 import tools.jackson.databind.JsonNode;
 
-import br.com.balaio.community.pergunta.application.port.out.PecasCatalogoPort;
 import br.com.balaio.community.shared.exception.ServicoIndisponivelException;
 import br.com.balaio.community.shared.integration.HttpClientes;
 
 @Component
-class PecasCatalogoHttpAdapter implements PecasCatalogoPort {
+class CatalogoHttpAdapter implements CatalogoPort {
     private final RestClient http;
 
-    PecasCatalogoHttpAdapter(@Value("${balaio.catalog-url}") String urlCatalogo) {
+    CatalogoHttpAdapter(@Value("${balaio.catalog-url}") String urlCatalogo) {
         this.http = HttpClientes.criar(urlCatalogo);
     }
 

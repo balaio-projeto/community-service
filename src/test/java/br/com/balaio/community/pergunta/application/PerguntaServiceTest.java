@@ -18,9 +18,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import br.com.balaio.community.pergunta.application.port.out.PecasCatalogoPort;
-import br.com.balaio.community.pergunta.application.port.out.PecasCatalogoPort.PecaCatalogo;
-import br.com.balaio.community.pergunta.application.port.out.PerfisPort;
+import br.com.balaio.community.shared.servicos.CatalogoPort;
+import br.com.balaio.community.shared.servicos.CatalogoPort.PecaCatalogo;
+import br.com.balaio.community.shared.servicos.PerfilPort;
 import br.com.balaio.community.pergunta.application.port.out.PerguntasPort;
 import br.com.balaio.community.pergunta.domain.Pergunta;
 import br.com.balaio.community.shared.exception.AcessoNegadoException;
@@ -36,14 +36,14 @@ class PerguntaServiceTest {
     private final UsuarioAutenticado comprador = new UsuarioAutenticado(UUID.randomUUID(), Papel.COMPRADOR, "t1");
     private final UsuarioAutenticado dono = new UsuarioAutenticado(artesaoDono, Papel.ARTESAO, "t2");
 
-    private PecasCatalogoPort catalogo;
-    private PerfisPort perfis;
+    private CatalogoPort catalogo;
+    private PerfilPort perfis;
     private PerguntaService perguntas;
 
     @BeforeEach
     void preparar() {
-        catalogo = mock(PecasCatalogoPort.class);
-        perfis = mock(PerfisPort.class);
+        catalogo = mock(CatalogoPort.class);
+        perfis = mock(PerfilPort.class);
         perguntas = new PerguntaService(new PerguntasEmMemoria(), catalogo, perfis, RELOGIO);
         when(catalogo.buscar(any(), any())).thenReturn(Optional.empty());
         when(catalogo.buscar(org.mockito.ArgumentMatchers.eq(PECA), any()))

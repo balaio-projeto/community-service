@@ -1,8 +1,10 @@
 package br.com.balaio.community.shared.security;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.core.MethodParameter;
+import org.springframework.core.ResolvableType;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
@@ -19,17 +21,30 @@ public class UsuarioAutenticadoArgumentResolver implements HandlerMethodArgument
 
     @Override
     public boolean supportsParameter(MethodParameter parametro) {
-        return UsuarioAutenticado.class.equals(parametro.getParameterType());
+        return UsuarioAutenticado.class.equals(parametro.getParameterType()) || ehUsuarioOpcional(parametro);
     }
 
     @Override
-    public UsuarioAutenticado resolveArgument(MethodParameter parametro, ModelAndViewContainer modelo,
+    public Object resolveArgument(MethodParameter parametro, ModelAndViewContainer modelo,
             NativeWebRequest requisicao, WebDataBinderFactory binder) {
+        var usuario = usuarioDoContexto();
+        if (ehUsuarioOpcional(parametro)) {
+            return usuario;
+        }
+        return usuario.orElseThrow(NaoAutenticadoException::new);
+    }
+
+    private static Optional<UsuarioAutenticado> usuarioDoContexto() {
         if (!(SecurityContextHolder.getContext().getAuthentication() instanceof JwtAuthenticationToken autenticacao)) {
-            throw new NaoAutenticadoException();
+            return Optional.empty();
         }
         var jwt = autenticacao.getToken();
         var papel = Papel.deCodigo(jwt.getClaimAsString(CLAIM_PAPEL)).orElseThrow(NaoAutenticadoException::new);
-        return new UsuarioAutenticado(UUID.fromString(jwt.getSubject()), papel, jwt.getTokenValue());
+        return Optional.of(new UsuarioAutenticado(UUID.fromString(jwt.getSubject()), papel, jwt.getTokenValue()));
+    }
+
+    private static boolean ehUsuarioOpcional(MethodParameter parametro) {
+        return Optional.class.equals(parametro.getParameterType())
+                && UsuarioAutenticado.class.equals(ResolvableType.forMethodParameter(parametro).getGeneric(0).resolve());
     }
 }

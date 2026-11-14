@@ -1,8 +1,8 @@
-package br.com.balaio.community.pergunta.application.port.out;
+package br.com.balaio.community.shared.servicos;
 
 import java.util.Optional;
 
-public interface PecasCatalogoPort {
+public interface CatalogoPort {
     Optional<PecaCatalogo> buscar(String slug, Optional<String> tokenVisitante);
 
     record PecaCatalogo(String slug, String artesaoSlug) {

@@ -1,4 +1,4 @@
-package br.com.balaio.community.pergunta.integration;
+package br.com.balaio.community.shared.servicos;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -9,16 +9,15 @@ import org.springframework.web.client.RestClientException;
 
 import tools.jackson.databind.JsonNode;
 
-import br.com.balaio.community.pergunta.application.port.out.PerfisPort;
 import br.com.balaio.community.shared.exception.NaoAutenticadoException;
 import br.com.balaio.community.shared.exception.ServicoIndisponivelException;
 import br.com.balaio.community.shared.integration.HttpClientes;
 
 @Component
-class PerfisHttpAdapter implements PerfisPort {
+class PerfilHttpAdapter implements PerfilPort {
     private final RestClient http;
 
-    PerfisHttpAdapter(@Value("${balaio.profile-url}") String urlPerfil) {
+    PerfilHttpAdapter(@Value("${balaio.profile-url}") String urlPerfil) {
         this.http = HttpClientes.criar(urlPerfil);
     }
 

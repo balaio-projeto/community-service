@@ -9,9 +9,9 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import br.com.balaio.community.pergunta.application.port.out.PecasCatalogoPort;
-import br.com.balaio.community.pergunta.application.port.out.PecasCatalogoPort.PecaCatalogo;
-import br.com.balaio.community.pergunta.application.port.out.PerfisPort;
+import br.com.balaio.community.shared.servicos.CatalogoPort;
+import br.com.balaio.community.shared.servicos.CatalogoPort.PecaCatalogo;
+import br.com.balaio.community.shared.servicos.PerfilPort;
 import br.com.balaio.community.pergunta.application.port.out.PerguntasPort;
 import br.com.balaio.community.pergunta.domain.Pergunta;
 import br.com.balaio.community.shared.exception.AcessoNegadoException;
@@ -22,11 +22,11 @@ import br.com.balaio.community.shared.security.UsuarioAutenticado;
 @Service
 public class PerguntaService {
     private final PerguntasPort perguntas;
-    private final PecasCatalogoPort pecas;
-    private final PerfisPort perfis;
+    private final CatalogoPort pecas;
+    private final PerfilPort perfis;
     private final Clock relogio;
 
-    public PerguntaService(PerguntasPort perguntas, PecasCatalogoPort pecas, PerfisPort perfis, Clock relogio) {
+    public PerguntaService(PerguntasPort perguntas, CatalogoPort pecas, PerfilPort perfis, Clock relogio) {
         this.perguntas = perguntas;
         this.pecas = pecas;
         this.perfis = perfis;

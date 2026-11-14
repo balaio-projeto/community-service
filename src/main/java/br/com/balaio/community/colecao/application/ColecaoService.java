@@ -1,6 +1,9 @@
 package br.com.balaio.community.colecao.application;
 
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -28,5 +31,15 @@ public class ColecaoService {
         var colecao = ColecaoDoUsuario.comItens(usuarioId, tipo, itens);
         colecoes.substituir(colecao);
         return colecao.itens();
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Long> quantosUsuariosTem(TipoColecao tipo, Collection<String> itens) {
+        return colecoes.contarUsuariosPorItem(tipo, itens);
+    }
+
+    @Transactional
+    public void esquecerItem(String item, TipoColecao... tipos) {
+        Arrays.stream(tipos).forEach(tipo -> colecoes.removerItemDeTodos(tipo, item));
     }
 }

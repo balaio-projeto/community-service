@@ -1,5 +1,9 @@
 package br.com.balaio.community.colecao.persistence;
 
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
@@ -42,5 +46,27 @@ class ColecoesJdbcAdapter implements ColecoesPort {
                 .param("usuario", colecao.usuarioId()).param("colecao", colecao.tipo().codigo())
                 .param("valor", colecao.itens().get(posicao)).param("posicao", posicao)
                 .update());
+    }
+
+    @Override
+    public Map<String, Long> contarUsuariosPorItem(TipoColecao tipo, Collection<String> itens) {
+        if (itens.isEmpty()) {
+            return Map.of();
+        }
+        var contagem = new HashMap<String, Long>();
+        jdbc.sql("""
+                SELECT valor, COUNT(*) AS total FROM itens_colecao
+                WHERE colecao = :colecao AND valor IN (:itens)
+                GROUP BY valor
+                """)
+                .param("colecao", tipo.codigo()).param("itens", List.copyOf(itens))
+                .query((rs, linha) -> contagem.put(rs.getString("valor"), rs.getLong("total"))).list();
+        return contagem;
+    }
+
+    @Override
+    public void removerItemDeTodos(TipoColecao tipo, String item) {
+        jdbc.sql("DELETE FROM itens_colecao WHERE colecao = :colecao AND valor = :valor")
+                .param("colecao", tipo.codigo()).param("valor", item).update();
     }
 }
