@@ -3,23 +3,22 @@ package br.com.balaio.community.video.storage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.Resource;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-import br.com.balaio.community.shared.exception.RequisicaoInvalidaException;
 import br.com.balaio.community.video.application.port.out.ArmazenamentoMidiaPort;
 
 @Component
+@ConditionalOnProperty(name = "balaio.midia.armazenamento", havingValue = "local", matchIfMissing = true)
 class ArmazenamentoLocalAdapter implements ArmazenamentoMidiaPort {
-    private static final int TAMANHO_BLOCO = 64 * 1024;
-
     private final Path raiz;
 
     ArmazenamentoLocalAdapter(@Value("${balaio.midia.diretorio:./dados/midia}") String diretorio) {
@@ -33,25 +32,28 @@ class ArmazenamentoLocalAdapter implements ArmazenamentoMidiaPort {
         try {
             Files.createDirectories(destino.getParent());
             temporario = Files.createTempFile(destino.getParent(), ".envio-", ".parcial");
-            long gravados = copiarComLimite(conteudo, temporario, tamanhoMaximoBytes);
+            long gravados = ArquivoTemporarioLimitado.copiar(conteudo, temporario, tamanhoMaximoBytes);
             Files.move(temporario, destino, StandardCopyOption.ATOMIC_MOVE);
             return gravados;
         } catch (IOException falha) {
             throw new UncheckedIOException("Falha ao gravar mídia.", falha);
         } finally {
-            apagarSilenciosamente(temporario);
+            ArquivoTemporarioLimitado.apagar(temporario);
         }
     }
 
     @Override
-    public Optional<Resource> abrir(String chave) {
+    public Optional<MidiaArmazenada> abrir(String chave) {
         Path arquivo = resolver(chave);
-        return Files.isRegularFile(arquivo) ? Optional.of(new FileSystemResource(arquivo)) : Optional.empty();
+        if (!Files.isRegularFile(arquivo)) {
+            return Optional.empty();
+        }
+        return Optional.of(new MidiaEmDisco(arquivo));
     }
 
     @Override
     public void remover(String chave) {
-        apagarSilenciosamente(resolver(chave));
+        ArquivoTemporarioLimitado.apagar(resolver(chave));
     }
 
     private Path resolver(String chave) {
@@ -62,33 +64,24 @@ class ArmazenamentoLocalAdapter implements ArmazenamentoMidiaPort {
         return caminho;
     }
 
-    private static long copiarComLimite(InputStream origem, Path destino, long limite) throws IOException {
-        try (var saida = Files.newOutputStream(destino)) {
-            byte[] bloco = new byte[TAMANHO_BLOCO];
-            long total = 0;
-            int lidos;
-            while ((lidos = origem.read(bloco)) != -1) {
-                total += lidos;
-                if (total > limite) {
-                    throw new RequisicaoInvalidaException("O arquivo excede o tamanho permitido.");
-                }
-                saida.write(bloco, 0, lidos);
+    private record MidiaEmDisco(Path arquivo) implements MidiaArmazenada {
+        @Override
+        public long tamanho() {
+            try {
+                return Files.size(arquivo);
+            } catch (IOException falha) {
+                throw new UncheckedIOException(falha);
             }
-            if (total == 0) {
-                throw new RequisicaoInvalidaException("O arquivo está vazio.");
-            }
-            return total;
         }
-    }
 
-    private static void apagarSilenciosamente(Path caminho) {
-        if (caminho == null) {
-            return;
-        }
-        try {
-            Files.deleteIfExists(caminho);
-        } catch (IOException ignorada) {
-            caminho.toFile().deleteOnExit();
+        @Override
+        public InputStream ler(long primeiroByte, long ultimoByte) {
+            try {
+                var canal = FileChannel.open(arquivo).position(primeiroByte);
+                return new TrechoInputStream(Channels.newInputStream(canal), ultimoByte - primeiroByte + 1);
+            } catch (IOException falha) {
+                throw new UncheckedIOException(falha);
+            }
         }
     }
 }

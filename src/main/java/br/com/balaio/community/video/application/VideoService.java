@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -188,6 +187,6 @@ public class VideoService {
     public record VideoComNumeros(Video video, long curtidas, long comentarios) {
     }
 
-    public record MidiaParaEntrega(Resource conteudo, String tipoConteudo) {
+    public record MidiaParaEntrega(ArmazenamentoMidiaPort.MidiaArmazenada conteudo, String tipoConteudo) {
     }
 }
