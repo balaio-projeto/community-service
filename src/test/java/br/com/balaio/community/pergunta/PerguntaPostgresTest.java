@@ -21,9 +21,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import br.com.balaio.community.pergunta.application.PerguntaService;
-import br.com.balaio.community.pergunta.application.port.out.PecasCatalogoPort;
-import br.com.balaio.community.pergunta.application.port.out.PecasCatalogoPort.PecaCatalogo;
-import br.com.balaio.community.pergunta.application.port.out.PerfisPort;
+import br.com.balaio.community.shared.servicos.CatalogoPort;
+import br.com.balaio.community.shared.servicos.CatalogoPort.PecaCatalogo;
+import br.com.balaio.community.shared.servicos.PerfilPort;
 import br.com.balaio.community.shared.security.Papel;
 import br.com.balaio.community.shared.security.UsuarioAutenticado;
 
@@ -41,8 +41,8 @@ class PerguntaPostgresTest {
     }
 
     @Autowired PerguntaService perguntas;
-    @MockitoBean PecasCatalogoPort catalogo;
-    @MockitoBean PerfisPort perfis;
+    @MockitoBean CatalogoPort catalogo;
+    @MockitoBean PerfilPort perfis;
     @MockitoBean JwtDecoder decoder;
 
     @Test

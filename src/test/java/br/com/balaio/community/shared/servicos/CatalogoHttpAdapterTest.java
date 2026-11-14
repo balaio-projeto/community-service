@@ -1,4 +1,4 @@
-package br.com.balaio.community.pergunta.integration;
+package br.com.balaio.community.shared.servicos;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -15,13 +15,13 @@ import org.junit.jupiter.api.Test;
 
 import com.sun.net.httpserver.HttpServer;
 
-import br.com.balaio.community.pergunta.application.port.out.PecasCatalogoPort.PecaCatalogo;
+import br.com.balaio.community.shared.servicos.CatalogoPort.PecaCatalogo;
 import br.com.balaio.community.shared.exception.ServicoIndisponivelException;
 
-class PecasCatalogoHttpAdapterTest {
+class CatalogoHttpAdapterTest {
     private HttpServer catalogo;
     private final AtomicReference<String> autorizacaoRecebida = new AtomicReference<>();
-    private PecasCatalogoHttpAdapter adaptador;
+    private CatalogoHttpAdapter adaptador;
 
     @BeforeEach
     void iniciar() throws IOException {
@@ -30,7 +30,7 @@ class PecasCatalogoHttpAdapterTest {
         responder("/api/v1/pecas/sumiu", 404, "{\"dados\":null,\"erro\":{\"codigo\":\"PECA_NAO_ENCONTRADA\"}}");
         responder("/api/v1/pecas/quebrado", 500, "{}");
         catalogo.start();
-        adaptador = new PecasCatalogoHttpAdapter("http://127.0.0.1:" + catalogo.getAddress().getPort());
+        adaptador = new CatalogoHttpAdapter("http://127.0.0.1:" + catalogo.getAddress().getPort());
     }
 
     @AfterEach

@@ -11,6 +11,8 @@ balaio:
   commerce-url: ${COMMERCE_SERVICE_URL:http://localhost:8083}
   catalog-url: ${CATALOG_SERVICE_URL:http://localhost:8081}
   profile-url: ${PROFILE_SERVICE_URL:http://localhost:8082}
+  midia:
+    diretorio: ${COMMUNITY_MIDIA_DIR:./dados/midia}
   internal-token: ${BALAIO_INTERNAL_TOKEN:}
   jwt:
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION:}

@@ -81,6 +81,19 @@ Comprador, peça e estado vêm do commerce (`GET /pedidos/{id}` com o token do c
 
 Quem participa é confirmado no commerce com o token de quem chama: o comprador via `GET /api/v1/pedidos/{id}` (só responde para o dono) e o artesão via `GET /api/v1/artesao/vendas` (só traz as vendas dele). Se o commerce não responder, o acesso é negado com 503, nunca liberado.
 
+## Vídeos e comentários (PI-200)
+
+- `GET /api/v1/videos`: vídeos publicados; com `?painel=true` e token de artesão, todos os vídeos dele, inclusive rascunhos.
+- `GET /api/v1/videos/{id}`: rascunho só aparece para o dono; para os outros, 404.
+- `POST /api/v1/videos` com `{ legenda, etiquetas, peca, duracao }` cria um **rascunho**. `PATCH /{id}` altera esses campos e a `situacao`; `DELETE /{id}` remove o vídeo, os arquivos, os comentários e as curtidas/salvos.
+- `PUT /{id}/arquivo` (corpo `video/mp4` ou `video/webm`, até 100 MB, `?duracao=m:ss` opcional) e `PUT /{id}/capa` (`image/jpeg|png|webp`, até 5 MB). O arquivo vai para um temporário e só é movido no fim; se algo falhar, nada fica para trás.
+- Só é possível publicar depois que o arquivo foi enviado (409 `VIDEO_SEM_ARQUIVO`), então não existe publicação fantasma.
+- `GET /{id}/arquivo` (com suporte a `Range`, para o player) e `GET /{id}/capa`.
+- `GET/POST /{id}/comentarios` com `{ texto }`: qualquer usuário autenticado comenta; `artesao: true` quando quem comenta é o dono do vídeo. O nome vem do profile.
+- `curtidas` é a contagem de usuários com o vídeo em `videosCurtidos`; `visualizacoes` ainda não é medida (0).
+
+Os arquivos ficam em `COMMUNITY_MIDIA_DIR` (padrão `./dados/midia`), atrás da porta `ArmazenamentoMidiaPort`. Quando o storage S3 da PI-213 existir, basta um novo adaptador; o contrato da API não muda.
+
 ## Mediação de pedidos (PI-195)
 
 Comprador autenticado cria `POST /api/v1/admin/mediacoes` com `pedido` (UUID), `assunto` e `relato`; o serviço consulta o commerce com o mesmo Bearer para validar a titularidade (404 se o pedido não existe, 403 se não é do comprador, 503 se o commerce não responde). Comprador lista somente as próprias mediações em `GET /api/v1/admin/mediacoes`; administrador lista todas, coloca em análise por `PATCH /api/v1/admin/mediacoes/{id}` com `estado: "emAnalise"` e decide por `POST /api/v1/admin/mediacoes/{id}/decisao` com `decisao: "cancelar_reembolsar" | "negar" | "manter_conversa"`.
