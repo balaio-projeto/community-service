@@ -30,7 +30,7 @@ import br.com.balaio.community.shared.api.ApiResponse;
 public class SecurityConfig {
     static final String[] ROTAS_SEMPRE_AUTENTICADAS = {
         "/api/v1/admin/mediacoes", "/api/v1/admin/mediacoes/**", "/api/v1/estado/*",
-        "/api/v1/pedidos/*/avaliacao"
+        "/api/v1/pedidos/*/avaliacao", "/api/v1/pedidos/*/conversa", "/api/v1/artesao/conversas"
     };
     static final String[] ROTAS_DE_ESCRITA_AUTENTICADAS = {
         "/api/v1/pecas/*/perguntas", "/api/v1/pecas/*/perguntas/*"

@@ -74,6 +74,13 @@ A existência e o dono da peça vêm do catalog (`GET /pecas/{slug}`, campo `art
 
 Comprador, peça e estado vêm do commerce (`GET /pedidos/{id}` com o token do comprador). O artesão vem do campo `artesaoId` do pedido quando o commerce o envia; sem ele, é lido da peça no catalog (`artesao-<id>`), o que só funciona enquanto a peça está publicada. O profile não é escrito: quem quiser a reputação consulta esta API.
 
+## Conversas por pedido (PI-222)
+
+- `GET` e `POST /api/v1/pedidos/{id}/conversa` com `{ texto }`: só o comprador e o artesão do pedido. Quem não participa recebe 404, sem ver nenhuma mensagem. Ler a conversa marca como lida para quem leu.
+- `GET /api/v1/artesao/conversas`: pedidos do artesão do token, com `id`, `pessoa`, `assunto`, `previa`, `quando`, `naoLida` e `retrato`. O parâmetro `?artesao=` da Fake API é ignorado.
+
+Quem participa é confirmado no commerce com o token de quem chama: o comprador via `GET /api/v1/pedidos/{id}` (só responde para o dono) e o artesão via `GET /api/v1/artesao/vendas` (só traz as vendas dele). Se o commerce não responder, o acesso é negado com 503, nunca liberado.
+
 ## Mediação de pedidos (PI-195)
 
 Comprador autenticado cria `POST /api/v1/admin/mediacoes` com `pedido` (UUID), `assunto` e `relato`; o serviço consulta o commerce com o mesmo Bearer para validar a titularidade (404 se o pedido não existe, 403 se não é do comprador, 503 se o commerce não responde). Comprador lista somente as próprias mediações em `GET /api/v1/admin/mediacoes`; administrador lista todas, coloca em análise por `PATCH /api/v1/admin/mediacoes/{id}` com `estado: "emAnalise"` e decide por `POST /api/v1/admin/mediacoes/{id}/decisao` com `decisao: "cancelar_reembolsar" | "negar" | "manter_conversa"`.
