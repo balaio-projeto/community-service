@@ -39,7 +39,7 @@ Regras que valem para todos os módulos:
 
 ## Execução
 
-Porta HTTP padrão: 8084. Para executar pela IDE, defina `COMMUNITY_SERVICE_PORT` (opcional), `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `JWT_PUBLIC_KEY_LOCATION`, `JWT_ISSUER`, `JWT_AUDIENCE`, `COMMERCE_SERVICE_URL` e `BALAIO_INTERNAL_TOKEN`. O banco e suas credenciais são configurados no repositório `platform`.
+Porta HTTP padrão: 8084. Para executar pela IDE, defina `COMMUNITY_SERVICE_PORT` (opcional), `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `JWT_PUBLIC_KEY_LOCATION`, `JWT_ISSUER`, `JWT_AUDIENCE`, `COMMERCE_SERVICE_URL`, `CATALOG_SERVICE_URL`, `PROFILE_SERVICE_URL` e `BALAIO_INTERNAL_TOKEN`. O banco e suas credenciais são configurados no repositório `platform`.
 
 No Windows: `.\mvnw.cmd spring-boot:run`.
 
@@ -49,6 +49,14 @@ O `Dockerfile` constrói uma imagem própria. Em `platform`, use `docker compose
 
 - `.\mvnw.cmd test`: domínio, casos de uso com portas em memória e controllers com segurança (MockMvc).
 - Integração com PostgreSQL 18 via Testcontainers (exige Docker): `$env:COMMUNITY_POSTGRES_TEST='true'; .\mvnw.cmd test`.
+
+## Perguntas públicas (PI-185)
+
+- `GET /api/v1/pecas/{slug}/perguntas`: público; lista em ordem de criação.
+- `POST /api/v1/pecas/{slug}/perguntas` com `{ "pergunta" }`: qualquer usuário autenticado. O nome exibido vem do profile (`GET /usuario`) e fica gravado com a pergunta.
+- `PATCH /api/v1/pecas/{slug}/perguntas/{id}` com `{ "resposta" }`: só o artesão dono da peça.
+
+A existência e o dono da peça vêm do catalog (`GET /pecas/{slug}`, campo `artesao` = `artesao-<id da conta>`), repassando o token de quem chama para que o dono enxergue a própria peça mesmo antes de publicada. Peça inexistente → 404 `PECA_NAO_ENCONTRADA`; pergunta de outra peça → 404 `PERGUNTA_NAO_ENCONTRADA`; quem não é o dono → 403 `SEM_PERMISSAO`; catalog ou profile fora do ar → 503.
 
 ## Mediação de pedidos (PI-195)
 

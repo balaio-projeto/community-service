@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ResourceLoader;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -27,8 +28,11 @@ import br.com.balaio.community.shared.api.ApiResponse;
 
 @Configuration
 public class SecurityConfig {
-    static final String[] ROTAS_AUTENTICADAS = {
+    static final String[] ROTAS_SEMPRE_AUTENTICADAS = {
         "/api/v1/admin/mediacoes", "/api/v1/admin/mediacoes/**"
+    };
+    static final String[] ROTAS_DE_ESCRITA_AUTENTICADAS = {
+        "/api/v1/pecas/*/perguntas", "/api/v1/pecas/*/perguntas/*"
     };
 
     private final ObjectMapper json;
@@ -65,7 +69,9 @@ public class SecurityConfig {
         return http.csrf(csrf -> csrf.disable())
                 .sessionManagement(sessao -> sessao.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(rotas -> rotas
-                        .requestMatchers(ROTAS_AUTENTICADAS).authenticated()
+                        .requestMatchers(ROTAS_SEMPRE_AUTENTICADAS).authenticated()
+                        .requestMatchers(HttpMethod.GET, ROTAS_DE_ESCRITA_AUTENTICADAS).permitAll()
+                        .requestMatchers(ROTAS_DE_ESCRITA_AUTENTICADAS).authenticated()
                         .anyRequest().permitAll())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> { })
                         .authenticationEntryPoint((requisicao, resposta, erro) -> escreverErro(resposta,
