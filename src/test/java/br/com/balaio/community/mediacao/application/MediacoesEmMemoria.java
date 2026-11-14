@@ -1,0 +1,71 @@
+package br.com.balaio.community.mediacao.application;
+
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+import br.com.balaio.community.mediacao.application.port.out.MediacoesPort;
+import br.com.balaio.community.mediacao.domain.Mediacao;
+
+class MediacoesEmMemoria implements MediacoesPort {
+    private final Map<UUID, Mediacao.Dados> armazenadas = new LinkedHashMap<>();
+
+    @Override
+    public boolean existeParaPedido(UUID pedidoId) {
+        return armazenadas.values().stream().anyMatch(dados -> dados.pedidoId().equals(pedidoId));
+    }
+
+    @Override
+    public Mediacao registrar(Mediacao mediacao) {
+        armazenadas.put(mediacao.id(), copiar(mediacao));
+        return reconstituir(mediacao.id());
+    }
+
+    @Override
+    public Mediacao atualizar(Mediacao mediacao) {
+        return registrar(mediacao);
+    }
+
+    @Override
+    public Optional<Mediacao> buscar(UUID id) {
+        return Optional.ofNullable(armazenadas.get(id)).map(Mediacao::reconstituir);
+    }
+
+    @Override
+    public Optional<Mediacao> buscarParaAtualizar(UUID id) {
+        return buscar(id);
+    }
+
+    @Override
+    public List<Mediacao> listarTodas() {
+        return armazenadas.values().stream().map(Mediacao::reconstituir)
+                .sorted(Comparator.comparing(Mediacao::criadaEm).reversed()).toList();
+    }
+
+    @Override
+    public List<Mediacao> listarDoComprador(UUID compradorId) {
+        return listarTodas().stream().filter(mediacao -> mediacao.compradorId().equals(compradorId)).toList();
+    }
+
+    @Override
+    public List<UUID> idsAguardandoEntrega(int maximoTentativas, int limite) {
+        return listarTodas().stream()
+                .filter(Mediacao::aguardaEntregaDaDecisao)
+                .filter(mediacao -> mediacao.tentativasEntrega() < maximoTentativas)
+                .limit(limite).map(Mediacao::id).toList();
+    }
+
+    private Mediacao reconstituir(UUID id) {
+        return Mediacao.reconstituir(armazenadas.get(id));
+    }
+
+    private static Mediacao.Dados copiar(Mediacao mediacao) {
+        return new Mediacao.Dados(mediacao.id(), mediacao.pedidoId(), mediacao.compradorId(), mediacao.assunto(),
+                mediacao.relato(), mediacao.estado(), mediacao.decisao(), mediacao.decisaoId(),
+                mediacao.tentativasEntrega(), mediacao.ultimoErroEntrega(), mediacao.criadaEm(),
+                mediacao.atualizadaEm());
+    }
+}
