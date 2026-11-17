@@ -11,7 +11,9 @@ FROM eclipse-temurin:25-jre-alpine
 
 WORKDIR /app
 
-RUN addgroup -S app && adduser -S -G app app
+RUN addgroup -S app && adduser -S -G app app \
+  && mkdir -p /app/dados/midia \
+  && chown -R app:app /app/dados
 
 COPY --from=build --chown=app:app /workspace/target/*.jar /app/app.jar
 
