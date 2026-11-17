@@ -18,6 +18,7 @@ import br.com.balaio.community.conversa.application.port.out.PedidosDaConversaPo
 import br.com.balaio.community.conversa.domain.ParteDaConversa;
 import br.com.balaio.community.conversa.domain.PedidoDaConversa;
 import br.com.balaio.community.shared.exception.ServicoIndisponivelException;
+import br.com.balaio.community.shared.integration.ConsultasCommerceClient;
 import br.com.balaio.community.shared.integration.HttpClientes;
 import br.com.balaio.community.shared.security.Papel;
 import br.com.balaio.community.shared.security.UsuarioAutenticado;
@@ -25,9 +26,12 @@ import br.com.balaio.community.shared.security.UsuarioAutenticado;
 @Component
 class PedidosDaConversaHttpAdapter implements PedidosDaConversaPort {
     private final RestClient http;
+    private final ConsultasCommerceClient consultasCommerce;
 
-    PedidosDaConversaHttpAdapter(@Value("${balaio.commerce-url}") String urlCommerce) {
+    PedidosDaConversaHttpAdapter(@Value("${balaio.commerce-url}") String urlCommerce,
+            ConsultasCommerceClient consultasCommerce) {
         this.http = HttpClientes.criar(urlCommerce);
+        this.consultasCommerce = consultasCommerce;
     }
 
     @Override
@@ -59,9 +63,7 @@ class PedidosDaConversaHttpAdapter implements PedidosDaConversaPort {
 
     private boolean compradorDoPedido(UUID pedidoId, UsuarioAutenticado comprador) {
         try {
-            HttpClientes.dados(http.get().uri("/api/v1/pedidos/{id}", pedidoId)
-                    .header(HttpHeaders.AUTHORIZATION, HttpClientes.bearer(comprador.token()))
-                    .retrieve().body(JsonNode.class));
+            consultasCommerce.consultarPedido(pedidoId, comprador.token());
             return true;
         } catch (HttpClientErrorException.NotFound | HttpClientErrorException.Forbidden naoEhDele) {
             return false;
