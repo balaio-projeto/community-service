@@ -15,26 +15,25 @@ import br.com.balaio.community.avaliacao.application.port.out.PedidosAvaliaveisP
 import br.com.balaio.community.avaliacao.domain.PedidoAvaliavel;
 import br.com.balaio.community.shared.exception.RecursoNaoEncontradoException;
 import br.com.balaio.community.shared.exception.ServicoIndisponivelException;
+import br.com.balaio.community.shared.integration.ConsultasCommerceClient;
 import br.com.balaio.community.shared.integration.HttpClientes;
 import br.com.balaio.community.shared.security.UsuarioAutenticado;
 
 @Component
 class PedidosAvaliaveisHttpAdapter implements PedidosAvaliaveisPort {
-    private final RestClient commerce;
+    private final ConsultasCommerceClient consultasCommerce;
     private final RestClient catalogo;
 
-    PedidosAvaliaveisHttpAdapter(@Value("${balaio.commerce-url}") String urlCommerce,
+    PedidosAvaliaveisHttpAdapter(ConsultasCommerceClient consultasCommerce,
             @Value("${balaio.catalog-url}") String urlCatalogo) {
-        this.commerce = HttpClientes.criar(urlCommerce);
+        this.consultasCommerce = consultasCommerce;
         this.catalogo = HttpClientes.criar(urlCatalogo);
     }
 
     @Override
     public PedidoAvaliavel buscarDoComprador(UUID pedidoId, String tokenComprador) {
         try {
-            JsonNode pedido = HttpClientes.dados(commerce.get().uri("/api/v1/pedidos/{id}", pedidoId)
-                    .header(HttpHeaders.AUTHORIZATION, HttpClientes.bearer(tokenComprador))
-                    .retrieve().body(JsonNode.class));
+            JsonNode pedido = consultasCommerce.consultarPedido(pedidoId, tokenComprador);
             String pecaSlug = pedido.path("pecaSlug").asString();
             return new PedidoAvaliavel(pedidoId, UUID.fromString(pedido.path("compradorId").asString()),
                     artesaoDoPedido(pedido, pecaSlug, tokenComprador), pecaSlug, pedido.path("estado").asString());
