@@ -6,7 +6,6 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpStatusCodeException;
@@ -20,6 +19,7 @@ import br.com.balaio.community.mediacao.domain.DecisaoMediacao;
 import br.com.balaio.community.shared.exception.AcessoNegadoException;
 import br.com.balaio.community.shared.exception.RecursoNaoEncontradoException;
 import br.com.balaio.community.shared.exception.ServicoIndisponivelException;
+import br.com.balaio.community.shared.integration.ConsultasCommerceClient;
 import br.com.balaio.community.shared.integration.HttpClientes;
 
 @Component
@@ -29,12 +29,15 @@ class PedidosCommerceHttpAdapter implements PedidosCommercePort {
     private static final String CABECALHO_TOKEN_INTERNO = "X-Balaio-Service-Token";
 
     private final RestClient http;
+    private final ConsultasCommerceClient consultasCommerce;
     private final String tokenInterno;
 
     PedidosCommerceHttpAdapter(@Value("${balaio.commerce-url}") String urlCommerce,
-            @Value("${balaio.internal-token:}") String tokenInterno) {
+            @Value("${balaio.internal-token:}") String tokenInterno,
+            ConsultasCommerceClient consultasCommerce) {
         this.http = HttpClientes.criar(urlCommerce);
         this.tokenInterno = validarTokenInterno(tokenInterno);
+        this.consultasCommerce = consultasCommerce;
     }
 
     private static String validarTokenInterno(String token) {
@@ -57,9 +60,7 @@ class PedidosCommerceHttpAdapter implements PedidosCommercePort {
     @Override
     public void confirmarCompradorDoPedido(UUID pedidoId, String tokenComprador) {
         try {
-            HttpClientes.dados(http.get().uri("/api/v1/pedidos/{id}", pedidoId)
-                    .header(HttpHeaders.AUTHORIZATION, HttpClientes.bearer(tokenComprador))
-                    .retrieve().body(JsonNode.class));
+            consultasCommerce.consultarPedido(pedidoId, tokenComprador);
         } catch (HttpClientErrorException.NotFound naoEncontrado) {
             throw new RecursoNaoEncontradoException("PEDIDO_NAO_ENCONTRADO", "Pedido não encontrado.");
         } catch (HttpClientErrorException.Forbidden semPermissao) {
