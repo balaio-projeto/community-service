@@ -53,7 +53,11 @@ class ArmazenamentoLocalAdapter implements ArmazenamentoMidiaPort {
 
     @Override
     public void remover(String chave) {
-        ArquivoTemporarioLimitado.apagar(resolver(chave));
+        try {
+            Files.deleteIfExists(resolver(chave));
+        } catch (IOException falha) {
+            throw new UncheckedIOException("Não foi possível remover a mídia " + chave, falha);
+        }
     }
 
     private Path resolver(String chave) {

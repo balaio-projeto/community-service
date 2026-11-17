@@ -28,12 +28,12 @@ import br.com.balaio.community.shared.api.ApiResponse;
 
 @Configuration
 public class SecurityConfig {
-    static final String[] ROTAS_SEMPRE_AUTENTICADAS = {
-        "/api/v1/admin/mediacoes", "/api/v1/admin/mediacoes/**", "/api/v1/estado/*",
-        "/api/v1/pedidos/*/avaliacao", "/api/v1/pedidos/*/conversa", "/api/v1/artesao/conversas"
+    static final String[] INFRAESTRUTURA_PUBLICA = {
+        "/actuator/health", "/actuator/health/**", "/actuator/info",
+        "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**", "/error"
     };
-    static final String[] ROTAS_DE_ESCRITA_AUTENTICADAS = {
-        "/api/v1/pecas/*/perguntas", "/api/v1/pecas/*/perguntas/*", "/api/v1/videos", "/api/v1/videos/**"
+    static final String[] LEITURAS_PUBLICAS = {
+        "/api/v1/pecas/*/perguntas", "/api/v1/videos", "/api/v1/videos/**", "/api/v1/artesaos/*/reputacao"
     };
 
     private final ObjectMapper json;
@@ -70,10 +70,10 @@ public class SecurityConfig {
         return http.csrf(csrf -> csrf.disable())
                 .sessionManagement(sessao -> sessao.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(rotas -> rotas
-                        .requestMatchers(ROTAS_SEMPRE_AUTENTICADAS).authenticated()
-                        .requestMatchers(HttpMethod.GET, ROTAS_DE_ESCRITA_AUTENTICADAS).permitAll()
-                        .requestMatchers(ROTAS_DE_ESCRITA_AUTENTICADAS).authenticated()
-                        .anyRequest().permitAll())
+                        .requestMatchers(INFRAESTRUTURA_PUBLICA).permitAll()
+                        .requestMatchers(HttpMethod.GET, LEITURAS_PUBLICAS).permitAll()
+                        .requestMatchers(HttpMethod.HEAD, LEITURAS_PUBLICAS).permitAll()
+                        .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> { })
                         .authenticationEntryPoint((requisicao, resposta, erro) -> escreverErro(resposta,
                                 HttpStatus.UNAUTHORIZED, "NAO_AUTENTICADO", "Autenticação necessária.")))

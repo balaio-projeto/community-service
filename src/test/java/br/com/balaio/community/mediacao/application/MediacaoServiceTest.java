@@ -4,24 +4,30 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.web.client.ResourceAccessException;
 
 import br.com.balaio.community.mediacao.application.port.out.PedidosCommercePort;
+import br.com.balaio.community.mediacao.application.port.out.PedidosCommercePort.EntregaRecusadaException;
 import br.com.balaio.community.mediacao.domain.DecisaoMediacao;
+import br.com.balaio.community.mediacao.domain.Mediacao;
 import br.com.balaio.community.mediacao.domain.EstadoMediacao;
 import br.com.balaio.community.shared.exception.AcessoNegadoException;
 import br.com.balaio.community.shared.exception.ConflitoException;
@@ -40,8 +46,9 @@ class MediacaoServiceTest {
     void preparar() {
         repositorio = new MediacoesEmMemoria();
         commerce = mock(PedidosCommercePort.class);
+        when(commerce.entregaDeDecisoesConfigurada()).thenReturn(true);
         mediacoes = new MediacaoService(repositorio, commerce, RELOGIO);
-        entregas = new EntregaDecisaoService(repositorio, commerce, RELOGIO);
+        entregas = new EntregaDecisaoService(repositorio, commerce, TransactionOperations.withoutTransaction(), RELOGIO);
     }
 
     @Test
@@ -97,7 +104,7 @@ class MediacaoServiceTest {
         var mediacao = mediacoes.abrir(abertura(pedido, UUID.randomUUID()));
         mediacoes.iniciarAnalise(mediacao.id());
         mediacoes.registrarDecisao(mediacao.id(), DecisaoMediacao.CANCELAR_REEMBOLSAR);
-        doThrow(new ResourceAccessException("timeout")).doNothing()
+        doThrow(new EntregaRecusadaException("commerce indisponível", new ResourceAccessException("timeout"))).doNothing()
                 .when(commerce).aplicarDecisao(eq(pedido), any(UUID.class), eq(DecisaoMediacao.CANCELAR_REEMBOLSAR));
 
         var aposFalha = entregas.entregar(mediacao.id());
@@ -121,6 +128,51 @@ class MediacaoServiceTest {
         entregas.entregar(mediacao.id());
 
         verify(commerce, never()).aplicarDecisao(any(), any(), any());
+    }
+
+    @Test
+    void semTokenInternoNaoChamaCommerceNemContaTentativa() {
+        var mediacao = mediacaoDecidida(UUID.randomUUID());
+        when(commerce.entregaDeDecisoesConfigurada()).thenReturn(false);
+
+        var atual = entregas.entregar(mediacao.id());
+
+        verify(commerce, never()).aplicarDecisao(any(), any(), any());
+        assertThat(atual.estado()).isEqualTo(EstadoMediacao.DECISAO_PENDENTE);
+        assertThat(atual.tentativasEntrega()).isZero();
+        assertThat(entregas.aguardandoEntrega(10)).isEmpty();
+    }
+
+    @Test
+    void erroDeProgramacaoNaoViraTentativaSilenciosa() {
+        var mediacao = mediacaoDecidida(UUID.randomUUID());
+        doThrow(new IllegalStateException("bug")).when(commerce).aplicarDecisao(any(), any(), any());
+
+        assertThatThrownBy(() -> entregas.entregar(mediacao.id())).isInstanceOf(IllegalStateException.class);
+        assertThat(repositorio.buscar(mediacao.id()).orElseThrow().tentativasEntrega()).isZero();
+    }
+
+    @Test
+    void falhaNaoSobrescreveEntregaConfirmadaPorOutroWorker() {
+        var mediacao = mediacaoDecidida(UUID.randomUUID());
+        doAnswer(chamada -> {
+            var concorrente = repositorio.buscarParaAtualizar(mediacao.id()).orElseThrow();
+            concorrente.confirmarEntregaDaDecisao(OffsetDateTime.now(RELOGIO));
+            repositorio.atualizar(concorrente);
+            throw new EntregaRecusadaException("commerce indisponível", null);
+        }).when(commerce).aplicarDecisao(any(), any(), any());
+
+        var atual = entregas.entregar(mediacao.id());
+
+        assertThat(atual.estado()).isEqualTo(EstadoMediacao.DECIDIDA);
+        assertThat(atual.tentativasEntrega()).isZero();
+    }
+
+    private Mediacao mediacaoDecidida(UUID pedido) {
+        var mediacao = mediacoes.abrir(abertura(pedido, UUID.randomUUID()));
+        mediacoes.iniciarAnalise(mediacao.id());
+        mediacoes.registrarDecisao(mediacao.id(), DecisaoMediacao.CANCELAR_REEMBOLSAR);
+        return mediacao;
     }
 
     private static AberturaMediacao abertura(UUID pedido, UUID comprador) {
