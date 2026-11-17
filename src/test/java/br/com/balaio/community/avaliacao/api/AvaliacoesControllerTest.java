@@ -71,4 +71,11 @@ class AvaliacoesControllerTest {
                 .andExpect(jsonPath("$.dados.total").value(2))
                 .andExpect(jsonPath("$.dados.distribuicao['5']").value(1));
     }
+
+    @Test
+    void rotaSemRegraExplicitaExigeAutenticacao() throws Exception {
+        mvc.perform(get("/api/v1/rota-sem-regra"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.erro.codigo").value("NAO_AUTENTICADO"));
+    }
 }

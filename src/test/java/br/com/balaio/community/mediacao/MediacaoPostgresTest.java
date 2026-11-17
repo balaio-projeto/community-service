@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.when;
 
 import java.util.UUID;
 
@@ -26,6 +27,7 @@ import br.com.balaio.community.mediacao.application.AberturaMediacao;
 import br.com.balaio.community.mediacao.application.EntregaDecisaoService;
 import br.com.balaio.community.mediacao.application.MediacaoService;
 import br.com.balaio.community.mediacao.application.port.out.PedidosCommercePort;
+import br.com.balaio.community.mediacao.application.port.out.PedidosCommercePort.EntregaRecusadaException;
 import br.com.balaio.community.mediacao.domain.DecisaoMediacao;
 import br.com.balaio.community.mediacao.domain.EstadoMediacao;
 import br.com.balaio.community.shared.exception.ConflitoException;
@@ -57,7 +59,9 @@ class MediacaoPostgresTest {
         assertThat(mediacoes.iniciarAnalise(mediacao.id()).estado()).isEqualTo(EstadoMediacao.EM_ANALISE);
 
         mediacoes.registrarDecisao(mediacao.id(), DecisaoMediacao.CANCELAR_REEMBOLSAR);
-        doThrow(new ResourceAccessException("timeout")).doNothing().when(commerce)
+        when(commerce.entregaDeDecisoesConfigurada()).thenReturn(true);
+        doThrow(new EntregaRecusadaException("commerce indisponível", new ResourceAccessException("timeout")))
+                .doNothing().when(commerce)
                 .aplicarDecisao(eq(pedido), any(UUID.class), eq(DecisaoMediacao.CANCELAR_REEMBOLSAR));
 
         assertThat(entregas.entregar(mediacao.id()).tentativasEntrega()).isEqualTo(1);

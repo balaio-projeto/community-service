@@ -7,11 +7,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import br.com.balaio.community.colecao.application.ColecaoService;
-import br.com.balaio.community.colecao.domain.TipoColecao;
 import br.com.balaio.community.shared.exception.NaoAutenticadoException;
 import br.com.balaio.community.shared.exception.RecursoNaoEncontradoException;
 import br.com.balaio.community.shared.exception.RequisicaoInvalidaException;
@@ -20,6 +23,7 @@ import br.com.balaio.community.shared.security.UsuarioAutenticado;
 import br.com.balaio.community.shared.servicos.CatalogoPort;
 import br.com.balaio.community.video.application.port.out.ArmazenamentoMidiaPort;
 import br.com.balaio.community.video.application.port.out.ComentariosVideoPort;
+import br.com.balaio.community.video.application.port.out.InteracoesVideoPort;
 import br.com.balaio.community.video.application.port.out.VideosPort;
 import br.com.balaio.community.video.domain.ArquivoMidia;
 import br.com.balaio.community.video.domain.SituacaoVideo;
@@ -28,20 +32,24 @@ import br.com.balaio.community.video.domain.Video;
 
 @Service
 public class VideoService {
+    private static final Logger LOG = LoggerFactory.getLogger(VideoService.class);
+
     private final VideosPort videos;
     private final ComentariosVideoPort comentarios;
     private final ArmazenamentoMidiaPort armazenamento;
     private final CatalogoPort catalogo;
-    private final ColecaoService colecoes;
+    private final InteracoesVideoPort interacoes;
+    private final TransactionOperations transacao;
     private final Clock relogio;
 
     public VideoService(VideosPort videos, ComentariosVideoPort comentarios, ArmazenamentoMidiaPort armazenamento,
-            CatalogoPort catalogo, ColecaoService colecoes, Clock relogio) {
+            CatalogoPort catalogo, InteracoesVideoPort interacoes, TransactionOperations transacao, Clock relogio) {
         this.videos = videos;
         this.comentarios = comentarios;
         this.armazenamento = armazenamento;
         this.catalogo = catalogo;
-        this.colecoes = colecoes;
+        this.interacoes = interacoes;
+        this.transacao = transacao;
         this.relogio = relogio;
     }
 
@@ -55,62 +63,56 @@ public class VideoService {
 
     @Transactional(readOnly = true)
     public VideoComNumeros consultar(UUID id, Optional<UsuarioAutenticado> usuario) {
-        return comNumeros(List.of(visivel(id, usuario))).getFirst();
+        return comNumeros(visivel(id, usuario));
     }
 
-    @Transactional
     public VideoComNumeros criar(DadosVideo dados, UsuarioAutenticado artesao) {
         artesao.exigirPapel(Papel.ARTESAO);
         exigirPecaDoArtesao(dados.peca(), artesao);
-        var video = Video.rascunho(artesao.id(), vazioComoNulo(dados.peca()), dados.legenda(), dados.etiquetas(),
-                dados.duracao(), agora());
-        if (dados.situacao() != null) {
-            video.mudarSituacao(SituacaoVideo.deCodigo(dados.situacao()), agora());
-        }
-        return comNumeros(List.of(videos.salvar(video))).getFirst();
+        return transacao.execute(status -> {
+            var video = Video.rascunho(artesao.id(), vazioComoNulo(dados.peca()), dados.legenda(),
+                    dados.etiquetas(), dados.duracao(), agora());
+            if (dados.situacao() != null) {
+                video.mudarSituacao(SituacaoVideo.deCodigo(dados.situacao()), agora());
+            }
+            return comNumeros(videos.salvar(video));
+        });
     }
 
-    @Transactional
     public VideoComNumeros alterar(UUID id, DadosVideo dados, UsuarioAutenticado artesao) {
-        var video = doDono(id, artesao);
+        doDono(id, artesao);
         exigirPecaDoArtesao(dados.peca(), artesao);
-        video.alterarDescricao(dados.legenda(), dados.etiquetas(), dados.peca());
-        if (dados.situacao() != null) {
-            video.mudarSituacao(SituacaoVideo.deCodigo(dados.situacao()), agora());
-        }
-        return comNumeros(List.of(videos.salvar(video))).getFirst();
+        return transacao.execute(status -> {
+            var video = doDono(id, artesao);
+            video.alterarDescricao(dados.legenda(), dados.etiquetas(), dados.peca());
+            if (dados.situacao() != null) {
+                video.mudarSituacao(SituacaoVideo.deCodigo(dados.situacao()), agora());
+            }
+            return comNumeros(videos.salvar(video));
+        });
     }
 
     @Transactional
     public VideoComNumeros remover(UUID id, UsuarioAutenticado artesao) {
         var video = doDono(id, artesao);
-        var removido = comNumeros(List.of(video)).getFirst();
+        var removido = comNumeros(video);
         comentarios.removerDoVideo(id);
-        colecoes.esquecerItem(id.toString(), TipoColecao.VIDEOS_CURTIDOS, TipoColecao.VIDEOS_SALVOS);
+        interacoes.esquecerVideo(id);
         videos.remover(id);
-        apagarSeExistir(video.arquivo());
-        apagarSeExistir(video.capa());
+        removerAposConfirmar(video.arquivo());
+        removerAposConfirmar(video.capa());
         return removido;
     }
 
-    @Transactional
     public VideoComNumeros enviarMidia(UUID id, EnvioMidia envio, UsuarioAutenticado artesao) {
-        var video = doDono(id, artesao);
+        doDono(id, artesao);
         var reservado = ArquivoMidia.novo(id, envio.tipo(), envio.tipoConteudo(), envio.tamanhoDeclarado());
         var novo = reservado.comTamanhoReal(
                 armazenamento.gravar(reservado.chave(), envio.conteudo(), envio.tipo().tamanhoMaximoBytes()));
-        var anterior = envio.tipo() == TipoMidia.VIDEO ? video.arquivo() : video.capa();
         try {
-            if (envio.tipo() == TipoMidia.VIDEO) {
-                video.anexarArquivo(novo, envio.duracao());
-            } else {
-                video.anexarCapa(novo);
-            }
-            var salvo = videos.salvar(video);
-            apagarSeExistir(anterior);
-            return comNumeros(List.of(salvo)).getFirst();
+            return transacao.execute(status -> anexarMidia(id, novo, envio, artesao));
         } catch (RuntimeException falha) {
-            armazenamento.remover(novo.chave());
+            removerSemInterromper(novo);
             throw falha;
         }
     }
@@ -129,18 +131,34 @@ public class VideoService {
         return videos.buscar(id).filter(video -> video.visivelPara(leitor)).orElseThrow(VideoService::naoEncontrado);
     }
 
+    private VideoComNumeros anexarMidia(UUID id, ArquivoMidia novo, EnvioMidia envio, UsuarioAutenticado artesao) {
+        var video = doDono(id, artesao);
+        var anterior = envio.tipo() == TipoMidia.VIDEO ? video.arquivo() : video.capa();
+        if (envio.tipo() == TipoMidia.VIDEO) {
+            video.anexarArquivo(novo, envio.duracao());
+        } else {
+            video.anexarCapa(novo);
+        }
+        var salvo = videos.salvar(video);
+        removerAposConfirmar(anterior);
+        return comNumeros(salvo);
+    }
+
     private Video doDono(UUID id, UsuarioAutenticado artesao) {
         return videos.buscar(id).filter(video -> video.pertenceA(artesao.id()))
                 .orElseThrow(VideoService::naoEncontrado);
     }
 
+    private VideoComNumeros comNumeros(Video video) {
+        return comNumeros(List.of(video)).getFirst();
+    }
+
     private List<VideoComNumeros> comNumeros(List<Video> lista) {
         var ids = lista.stream().map(Video::id).toList();
         var totalComentarios = comentarios.contarPorVideo(ids);
-        var totalCurtidas = colecoes.quantosUsuariosTem(TipoColecao.VIDEOS_CURTIDOS,
-                ids.stream().map(UUID::toString).toList());
+        var totalCurtidas = interacoes.curtidasPorVideo(ids);
         return lista.stream().map(video -> new VideoComNumeros(video,
-                totalCurtidas.getOrDefault(video.id().toString(), 0L),
+                totalCurtidas.getOrDefault(video.id(), 0L),
                 totalComentarios.getOrDefault(video.id(), 0L))).toList();
     }
 
@@ -155,9 +173,28 @@ public class VideoService {
         }
     }
 
-    private void apagarSeExistir(ArquivoMidia arquivo) {
-        if (arquivo != null) {
+    private void removerAposConfirmar(ArquivoMidia arquivo) {
+        if (arquivo == null) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            removerSemInterromper(arquivo);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                removerSemInterromper(arquivo);
+            }
+        });
+    }
+
+    private void removerSemInterromper(ArquivoMidia arquivo) {
+        try {
             armazenamento.remover(arquivo.chave());
+        } catch (RuntimeException falha) {
+            LOG.warn("Não foi possível remover a mídia {}; o arquivo ficou órfão no armazenamento.",
+                    arquivo.chave(), falha);
         }
     }
 
