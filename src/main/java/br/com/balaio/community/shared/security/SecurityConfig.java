@@ -33,7 +33,12 @@ public class SecurityConfig {
         "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**", "/error"
     };
     static final String[] LEITURAS_PUBLICAS = {
-        "/api/v1/pecas/*/perguntas", "/api/v1/videos", "/api/v1/videos/**", "/api/v1/artesaos/*/reputacao"
+        "/api/v1/pecas/*/perguntas", "/api/v1/artesaos/*/reputacao",
+        "/api/v1/videos", "/api/v1/videos/*", "/api/v1/videos/*/arquivo", "/api/v1/videos/*/capa",
+        "/api/v1/videos/*/comentarios"
+    };
+    static final String[] ESCRITAS_PUBLICAS = {
+        "/api/v1/videos/*/visualizacoes"
     };
 
     private final ObjectMapper json;
@@ -73,6 +78,7 @@ public class SecurityConfig {
                         .requestMatchers(INFRAESTRUTURA_PUBLICA).permitAll()
                         .requestMatchers(HttpMethod.GET, LEITURAS_PUBLICAS).permitAll()
                         .requestMatchers(HttpMethod.HEAD, LEITURAS_PUBLICAS).permitAll()
+                        .requestMatchers(HttpMethod.POST, ESCRITAS_PUBLICAS).permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> { })
                         .authenticationEntryPoint((requisicao, resposta, erro) -> escreverErro(resposta,

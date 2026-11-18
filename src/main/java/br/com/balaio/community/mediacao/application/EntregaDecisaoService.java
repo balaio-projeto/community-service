@@ -13,12 +13,11 @@ import org.springframework.transaction.support.TransactionOperations;
 
 import br.com.balaio.community.mediacao.application.port.out.MediacoesPort;
 import br.com.balaio.community.mediacao.application.port.out.PedidosCommercePort;
-import br.com.balaio.community.mediacao.application.port.out.PedidosCommercePort.EntregaRecusadaException;
+import br.com.balaio.community.mediacao.application.port.out.PedidosCommercePort.FalhaNaEntregaException;
 import br.com.balaio.community.mediacao.domain.Mediacao;
 
 @Service
 public class EntregaDecisaoService {
-    public static final int MAXIMO_TENTATIVAS = 10;
     private static final Logger LOG = LoggerFactory.getLogger(EntregaDecisaoService.class);
 
     private final MediacoesPort mediacoes;
@@ -39,7 +38,7 @@ public class EntregaDecisaoService {
         if (!pedidos.entregaDeDecisoesConfigurada()) {
             return List.of();
         }
-        return mediacoes.idsAguardandoEntrega(MAXIMO_TENTATIVAS, limite);
+        return mediacoes.idsAguardandoEntrega(limite);
     }
 
     public Mediacao entregar(UUID mediacaoId) {
@@ -51,12 +50,22 @@ public class EntregaDecisaoService {
         return transacao.execute(status -> registrar(mediacaoId, resultado));
     }
 
+    public Mediacao reprocessar(UUID mediacaoId) {
+        transacao.executeWithoutResult(status -> {
+            var mediacao = mediacoes.buscarParaAtualizar(mediacaoId).orElseThrow(MediacaoService::naoEncontrada);
+            mediacao.reabrirEntregaDaDecisao(agora());
+            mediacoes.atualizar(mediacao);
+        });
+        LOG.info("Mediação {}: entrega da decisão reaberta por um administrador.", mediacaoId);
+        return entregar(mediacaoId);
+    }
+
     private ResultadoEntrega enviarAoCommerce(Mediacao mediacao) {
         try {
             pedidos.aplicarDecisao(mediacao.pedidoId(), mediacao.decisaoId(), mediacao.decisao());
             return ResultadoEntrega.CONFIRMADA;
-        } catch (EntregaRecusadaException falha) {
-            return new ResultadoEntrega(falha.getMessage());
+        } catch (FalhaNaEntregaException falha) {
+            return new ResultadoEntrega(falha.getMessage(), falha.admiteNovaTentativa());
         }
     }
 
@@ -67,18 +76,21 @@ public class EntregaDecisaoService {
         }
         if (resultado.confirmada()) {
             mediacao.confirmarEntregaDaDecisao(agora());
+        } else if (resultado.admiteNovaTentativa()) {
+            mediacao.registrarFalhaTemporariaNaEntrega(resultado.motivoDaFalha(), agora());
         } else {
-            mediacao.registrarFalhaNaEntrega(resultado.motivoDaFalha(), agora());
-            avisarSeEsgotou(mediacao);
+            mediacao.registrarFalhaDefinitivaNaEntrega(resultado.motivoDaFalha(), agora());
         }
+        avisarSeFalhou(mediacao);
         return mediacoes.atualizar(mediacao);
     }
 
-    private static void avisarSeEsgotou(Mediacao mediacao) {
-        if (mediacao.tentativasEntrega() >= MAXIMO_TENTATIVAS) {
-            LOG.error("Mediação {} esgotou {} tentativas de entregar a decisão ao commerce; último erro: {}",
-                    mediacao.id(), MAXIMO_TENTATIVAS, mediacao.ultimoErroEntrega());
-        } else {
+    private static void avisarSeFalhou(Mediacao mediacao) {
+        if (mediacao.entregaFalhou()) {
+            LOG.error("Mediação {}: entrega da decisão ao commerce interrompida após {} tentativa(s); "
+                    + "requer reprocessamento administrativo. Último erro: {}",
+                    mediacao.id(), mediacao.tentativasEntrega(), mediacao.ultimoErroEntrega());
+        } else if (mediacao.aguardaEntregaDaDecisao()) {
             LOG.warn("Mediação {}: tentativa {} de entregar a decisão falhou ({})",
                     mediacao.id(), mediacao.tentativasEntrega(), mediacao.ultimoErroEntrega());
         }
@@ -88,8 +100,8 @@ public class EntregaDecisaoService {
         return OffsetDateTime.now(relogio);
     }
 
-    private record ResultadoEntrega(String motivoDaFalha) {
-        static final ResultadoEntrega CONFIRMADA = new ResultadoEntrega(null);
+    private record ResultadoEntrega(String motivoDaFalha, boolean admiteNovaTentativa) {
+        static final ResultadoEntrega CONFIRMADA = new ResultadoEntrega(null, false);
 
         boolean confirmada() {
             return motivoDaFalha == null;

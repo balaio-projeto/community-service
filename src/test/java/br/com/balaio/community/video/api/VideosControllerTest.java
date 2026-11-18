@@ -2,12 +2,14 @@ package br.com.balaio.community.video.api;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -25,11 +27,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import br.com.balaio.community.shared.config.WebConfig;
+import br.com.balaio.community.shared.paginacao.Pagina;
 import br.com.balaio.community.shared.security.SecurityConfig;
 import br.com.balaio.community.shared.security.UsuarioAutenticadoArgumentResolver;
 import br.com.balaio.community.video.application.ComentarioVideoService;
@@ -53,7 +57,8 @@ class VideosControllerTest {
     void visitanteListaVideosNoFormatoDaTela() throws Exception {
         UUID artesao = UUID.randomUUID();
         var video = Video.rascunho(artesao, "vaso", "Asa do vaso", List.of("ceramica"), "0:48", AGORA);
-        when(videos.listar(eq(false), eq(Optional.empty()))).thenReturn(List.of(new VideoComNumeros(video, 3, 2)));
+        when(videos.listar(eq(false), eq(Optional.empty()), eq(Pagina.primeira())))
+                .thenReturn(List.of(new VideoComNumeros(video, 3, 2)));
 
         mvc.perform(get("/api/v1/videos"))
                 .andExpect(status().isOk())
@@ -111,6 +116,44 @@ class VideosControllerTest {
                         (int) (ultimoByte - primeiroByte + 1));
             }
         }, "video/mp4");
+    }
+
+    @Test
+    void visitanteRegistraVisualizacaoSemLogin() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mvc.perform(post("/api/v1/videos/" + id + "/visualizacoes")).andExpect(status().isNoContent());
+
+        verify(videos).registrarVisualizacao(id, Optional.empty());
+    }
+
+    @Test
+    void listagemRepassaAPaginaPedida() throws Exception {
+        when(videos.listar(eq(false), eq(Optional.empty()), eq(Pagina.de(3, 20)))).thenReturn(List.of());
+
+        mvc.perform(get("/api/v1/videos").param("pagina", "3").param("tamanho", "20")).andExpect(status().isOk());
+
+        verify(videos).listar(false, Optional.empty(), Pagina.de(3, 20));
+    }
+
+    @Test
+    void rotaDeVideoNaoListadaComoPublicaExigeLogin() throws Exception {
+        mvc.perform(get("/api/v1/videos/" + UUID.randomUUID() + "/rascunhos-internos"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/videos/" + UUID.randomUUID() + "/comentarios/1"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void envioConcorrenteNoMesmoVideoRetorna409() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(videos.enviarMidia(eq(id), any(), any()))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Video.class, id));
+
+        mvc.perform(put("/api/v1/videos/" + id + "/capa").with(jwt().jwt(t -> t.subject(UUID.randomUUID().toString())
+                        .claim("papel", "artesao"))).contentType("image/png").content(new byte[] { 1, 2, 3 }))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.erro.codigo").value("ALTERACAO_CONCORRENTE"));
     }
 
     @Test

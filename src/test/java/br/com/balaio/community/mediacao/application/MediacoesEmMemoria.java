@@ -9,6 +9,7 @@ import java.util.UUID;
 
 import br.com.balaio.community.mediacao.application.port.out.MediacoesPort;
 import br.com.balaio.community.mediacao.domain.Mediacao;
+import br.com.balaio.community.shared.paginacao.Pagina;
 
 class MediacoesEmMemoria implements MediacoesPort {
     private final Map<UUID, Mediacao.Dados> armazenadas = new LinkedHashMap<>();
@@ -40,22 +41,28 @@ class MediacoesEmMemoria implements MediacoesPort {
     }
 
     @Override
-    public List<Mediacao> listarTodas() {
+    public List<Mediacao> listarTodas(Pagina pagina) {
+        return paginar(todas(), pagina);
+    }
+
+    @Override
+    public List<Mediacao> listarDoComprador(UUID compradorId, Pagina pagina) {
+        return paginar(todas().stream().filter(mediacao -> mediacao.compradorId().equals(compradorId)).toList(),
+                pagina);
+    }
+
+    @Override
+    public List<UUID> idsAguardandoEntrega(int limite) {
+        return todas().stream().filter(Mediacao::aguardaEntregaDaDecisao).limit(limite).map(Mediacao::id).toList();
+    }
+
+    private List<Mediacao> todas() {
         return armazenadas.values().stream().map(Mediacao::reconstituir)
                 .sorted(Comparator.comparing(Mediacao::criadaEm).reversed()).toList();
     }
 
-    @Override
-    public List<Mediacao> listarDoComprador(UUID compradorId) {
-        return listarTodas().stream().filter(mediacao -> mediacao.compradorId().equals(compradorId)).toList();
-    }
-
-    @Override
-    public List<UUID> idsAguardandoEntrega(int maximoTentativas, int limite) {
-        return listarTodas().stream()
-                .filter(Mediacao::aguardaEntregaDaDecisao)
-                .filter(mediacao -> mediacao.tentativasEntrega() < maximoTentativas)
-                .limit(limite).map(Mediacao::id).toList();
+    private static List<Mediacao> paginar(List<Mediacao> lista, Pagina pagina) {
+        return lista.stream().skip(pagina.deslocamento()).limit(pagina.tamanho()).toList();
     }
 
     private Mediacao reconstituir(UUID id) {

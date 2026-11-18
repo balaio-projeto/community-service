@@ -5,10 +5,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 import br.com.balaio.community.mediacao.application.port.out.MediacoesPort;
 import br.com.balaio.community.mediacao.domain.Mediacao;
+import br.com.balaio.community.shared.paginacao.Pagina;
 import br.com.balaio.community.shared.exception.ConflitoException;
 import br.com.balaio.community.shared.exception.RecursoNaoEncontradoException;
 
@@ -54,18 +56,23 @@ class MediacoesPersistenceAdapter implements MediacoesPort {
     }
 
     @Override
-    public List<Mediacao> listarTodas() {
-        return repositorio.findAllByOrderByCriadaEmDesc().stream().map(MediacaoJpaEntity::paraDominio).toList();
-    }
-
-    @Override
-    public List<Mediacao> listarDoComprador(UUID compradorId) {
-        return repositorio.findByCompradorIdOrderByCriadaEmDesc(compradorId).stream()
+    public List<Mediacao> listarTodas(Pagina pagina) {
+        return repositorio.findAllByOrderByCriadaEmDesc(paginacao(pagina)).stream()
                 .map(MediacaoJpaEntity::paraDominio).toList();
     }
 
     @Override
-    public List<UUID> idsAguardandoEntrega(int maximoTentativas, int limite) {
-        return repositorio.idsAguardandoEntrega(maximoTentativas, limite);
+    public List<Mediacao> listarDoComprador(UUID compradorId, Pagina pagina) {
+        return repositorio.findByCompradorIdOrderByCriadaEmDesc(compradorId, paginacao(pagina)).stream()
+                .map(MediacaoJpaEntity::paraDominio).toList();
+    }
+
+    private static PageRequest paginacao(Pagina pagina) {
+        return PageRequest.of(pagina.numero(), pagina.tamanho());
+    }
+
+    @Override
+    public List<UUID> idsAguardandoEntrega(int limite) {
+        return repositorio.idsAguardandoEntrega(limite);
     }
 }

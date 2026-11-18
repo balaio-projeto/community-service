@@ -27,7 +27,7 @@ import br.com.balaio.community.mediacao.application.AberturaMediacao;
 import br.com.balaio.community.mediacao.application.EntregaDecisaoService;
 import br.com.balaio.community.mediacao.application.MediacaoService;
 import br.com.balaio.community.mediacao.application.port.out.PedidosCommercePort;
-import br.com.balaio.community.mediacao.application.port.out.PedidosCommercePort.EntregaRecusadaException;
+import br.com.balaio.community.mediacao.application.port.out.PedidosCommercePort.FalhaNaEntregaException;
 import br.com.balaio.community.mediacao.domain.DecisaoMediacao;
 import br.com.balaio.community.mediacao.domain.EstadoMediacao;
 import br.com.balaio.community.shared.exception.ConflitoException;
@@ -60,7 +60,7 @@ class MediacaoPostgresTest {
 
         mediacoes.registrarDecisao(mediacao.id(), DecisaoMediacao.CANCELAR_REEMBOLSAR);
         when(commerce.entregaDeDecisoesConfigurada()).thenReturn(true);
-        doThrow(new EntregaRecusadaException("commerce indisponível", new ResourceAccessException("timeout")))
+        doThrow(FalhaNaEntregaException.temporaria("commerce indisponível", new ResourceAccessException("timeout")))
                 .doNothing().when(commerce)
                 .aplicarDecisao(eq(pedido), any(UUID.class), eq(DecisaoMediacao.CANCELAR_REEMBOLSAR));
 
@@ -73,6 +73,24 @@ class MediacaoPostgresTest {
         assertThat(entregas.entregar(mediacao.id()).estado()).isEqualTo(EstadoMediacao.DECIDIDA);
         assertThat(mediacoes.registrarDecisao(mediacao.id(), DecisaoMediacao.CANCELAR_REEMBOLSAR).estado())
                 .isEqualTo(EstadoMediacao.DECIDIDA);
+    }
+
+    @Test
+    void mediacaoComEntregaRecusadaPersisteEstadoTerminalEPodeSerReprocessada() {
+        UUID pedido = UUID.randomUUID();
+        var mediacao = mediacoes.abrir(new AberturaMediacao(pedido, UUID.randomUUID(), "Ajuda", "Relato.", "token"));
+        mediacoes.registrarDecisao(mediacao.id(), DecisaoMediacao.NEGAR);
+        when(commerce.entregaDeDecisoesConfigurada()).thenReturn(true);
+        doThrow(FalhaNaEntregaException.definitiva("commerce recusou a decisão com HTTP 409", null)).doNothing()
+                .when(commerce).aplicarDecisao(any(), any(), any());
+
+        assertThat(entregas.entregar(mediacao.id()).estado()).isEqualTo(EstadoMediacao.FALHA_ENTREGA);
+        jdbc.update("UPDATE mediacoes SET atualizada_em = now() - interval '5 minutes' WHERE id = ?", mediacao.id());
+        assertThat(entregas.aguardandoEntrega(50)).doesNotContain(mediacao.id());
+        assertThat(jdbc.queryForObject("SELECT estado FROM mediacoes WHERE id = ?", String.class, mediacao.id()))
+                .isEqualTo("falha_entrega");
+
+        assertThat(entregas.reprocessar(mediacao.id()).estado()).isEqualTo(EstadoMediacao.DECIDIDA);
     }
 
     @Test

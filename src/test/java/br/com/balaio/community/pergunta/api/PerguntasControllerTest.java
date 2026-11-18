@@ -25,6 +25,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import br.com.balaio.community.shared.paginacao.Pagina;
 import br.com.balaio.community.pergunta.application.PerguntaService;
 import br.com.balaio.community.pergunta.domain.Pergunta;
 import br.com.balaio.community.shared.config.WebConfig;
@@ -46,7 +47,7 @@ class PerguntasControllerTest {
     @Test
     void visitanteListaPerguntasNoFormatoDaFakeApi() throws Exception {
         var pergunta = Pergunta.fazer("vaso-de-barro", UUID.randomUUID(), "Ana", "Serve para planta?", AGORA);
-        when(perguntas.listarDaPeca("vaso-de-barro")).thenReturn(List.of(pergunta));
+        when(perguntas.listarDaPeca("vaso-de-barro", Pagina.primeira())).thenReturn(List.of(pergunta));
 
         mvc.perform(get(URL))
                 .andExpect(status().isOk())
@@ -58,7 +59,7 @@ class PerguntasControllerTest {
 
     @Test
     void pecaInexistenteRetorna404() throws Exception {
-        when(perguntas.listarDaPeca("vaso-de-barro"))
+        when(perguntas.listarDaPeca("vaso-de-barro", Pagina.primeira()))
                 .thenThrow(new RecursoNaoEncontradoException("PECA_NAO_ENCONTRADA", "Peça não encontrada."));
 
         mvc.perform(get(URL)).andExpect(status().isNotFound())

@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -48,6 +52,27 @@ class ColecaoPostgresTest {
         assertThat(colecoes.consultar(ana, TipoColecao.FAVORITOS)).containsExactly("vaso", "cesto");
         assertThat(colecoes.consultar(bia, TipoColecao.FAVORITOS)).containsExactly("rede");
         assertThat(colecoes.consultar(bia, TipoColecao.VIDEOS_CURTIDOS)).isEmpty();
+    }
+
+    @Test
+    void doisDispositivosAlterandoAoMesmoTempoNaoPerdemItens() throws Exception {
+        UUID ana = UUID.randomUUID();
+        colecoes.substituir(ana, TipoColecao.VIDEOS_SALVOS, List.of("v0"));
+        int dispositivos = 8;
+        var largada = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(dispositivos)) {
+            var envios = IntStream.range(1, dispositivos + 1).mapToObj(i -> executor.submit(() -> {
+                largada.await();
+                return colecoes.alterar(ana, TipoColecao.VIDEOS_SALVOS, List.of("v" + i), null);
+            })).toList();
+            largada.countDown();
+            for (var envio : envios) {
+                envio.get(30, TimeUnit.SECONDS);
+            }
+        }
+
+        assertThat(colecoes.consultar(ana, TipoColecao.VIDEOS_SALVOS))
+                .hasSize(dispositivos + 1).contains("v0", "v1", "v8");
     }
 
     @Test

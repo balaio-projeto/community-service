@@ -14,6 +14,7 @@ import br.com.balaio.community.mediacao.domain.DecisaoMediacao;
 import br.com.balaio.community.mediacao.domain.Mediacao;
 import br.com.balaio.community.shared.exception.ConflitoException;
 import br.com.balaio.community.shared.exception.RecursoNaoEncontradoException;
+import br.com.balaio.community.shared.paginacao.Pagina;
 
 @Service
 public class MediacaoService {
@@ -27,7 +28,6 @@ public class MediacaoService {
         this.relogio = relogio;
     }
 
-    @Transactional
     public Mediacao abrir(AberturaMediacao abertura) {
         var mediacao = Mediacao.abrir(abertura.pedidoId(), abertura.compradorId(), abertura.assunto(),
                 abertura.relato(), agora());
@@ -39,13 +39,13 @@ public class MediacaoService {
     }
 
     @Transactional(readOnly = true)
-    public List<Mediacao> listarTodas() {
-        return mediacoes.listarTodas();
+    public List<Mediacao> listarTodas(Pagina pagina) {
+        return mediacoes.listarTodas(pagina);
     }
 
     @Transactional(readOnly = true)
-    public List<Mediacao> listarDoComprador(UUID compradorId) {
-        return mediacoes.listarDoComprador(compradorId);
+    public List<Mediacao> listarDoComprador(UUID compradorId, Pagina pagina) {
+        return mediacoes.listarDoComprador(compradorId, pagina);
     }
 
     @Transactional(readOnly = true)

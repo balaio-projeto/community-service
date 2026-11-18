@@ -17,6 +17,7 @@ import br.com.balaio.community.shared.exception.RecursoNaoEncontradoException;
 import br.com.balaio.community.shared.exception.ServicoIndisponivelException;
 import br.com.balaio.community.shared.integration.ConsultasCommerceClient;
 import br.com.balaio.community.shared.integration.HttpClientes;
+import br.com.balaio.community.shared.integration.RespostaIncompativelException;
 import br.com.balaio.community.shared.security.UsuarioAutenticado;
 
 @Component
@@ -39,7 +40,7 @@ class PedidosAvaliaveisHttpAdapter implements PedidosAvaliaveisPort {
                     artesaoDoPedido(pedido, pecaSlug, tokenComprador), pecaSlug, pedido.path("estado").asString());
         } catch (HttpClientErrorException.NotFound | HttpClientErrorException.Forbidden naoEhDoComprador) {
             throw new RecursoNaoEncontradoException("PEDIDO_NAO_ENCONTRADO", "Pedido não encontrado.");
-        } catch (RestClientException | IllegalStateException | IllegalArgumentException indisponivel) {
+        } catch (RestClientException | RespostaIncompativelException | IllegalArgumentException indisponivel) {
             throw new ServicoIndisponivelException("COMMERCE_INDISPONIVEL", "Não foi possível consultar o pedido.");
         }
     }
@@ -62,7 +63,7 @@ class PedidosAvaliaveisHttpAdapter implements PedidosAvaliaveisPort {
                 throw artesaoNaoIdentificado();
             }
             return UUID.fromString(artesaoSlug.substring(UsuarioAutenticado.PREFIXO_SLUG_ARTESAO.length()));
-        } catch (RestClientException | IllegalArgumentException semPeca) {
+        } catch (RestClientException | RespostaIncompativelException | IllegalArgumentException semPeca) {
             throw artesaoNaoIdentificado();
         }
     }

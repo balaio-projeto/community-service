@@ -25,6 +25,52 @@ class ColecaoDoUsuarioTest {
     }
 
     @Test
+    void alteracaoAcrescentaAoFimERemoveSemReenviarALista() {
+        var atual = ColecaoDoUsuario.comItens(USUARIO, TipoColecao.FAVORITOS, List.of("vaso", "cesto"));
+
+        var alterada = atual.alterar(List.of("rede", "vaso"), List.of("cesto"));
+
+        assertThat(alterada.itens()).containsExactly("vaso", "rede");
+    }
+
+    @Test
+    void alteracaoRepetidaEhIdempotente() {
+        var atual = ColecaoDoUsuario.comItens(USUARIO, TipoColecao.VIDEOS_CURTIDOS, List.of("v1"));
+
+        var umaVez = atual.alterar(List.of("v2"), List.of("v9"));
+        var duasVezes = umaVez.alterar(List.of("v2"), List.of("v9"));
+
+        assertThat(duasVezes.itens()).containsExactly("v1", "v2").isEqualTo(umaVez.itens());
+    }
+
+    @Test
+    void historicoRecebeBuscaNovaNoInicioEDescartaAMaisAntiga() {
+        var buscas = IntStream.range(0, 20).mapToObj(i -> "busca " + i).toList();
+        var atual = ColecaoDoUsuario.comItens(USUARIO, TipoColecao.HISTORICO_BUSCA, buscas);
+
+        var alterada = atual.alterar(List.of("renda", "busca 5"), null);
+
+        assertThat(alterada.itens()).hasSize(20).startsWith("renda", "busca 5", "busca 0").doesNotContain("busca 19");
+    }
+
+    @Test
+    void alteracaoQueUltrapassaOLimiteDosFavoritosEhRecusada() {
+        var cheios = IntStream.range(0, TipoColecao.FAVORITOS.quantidadeMaxima()).mapToObj(i -> "peca-" + i).toList();
+        var atual = ColecaoDoUsuario.comItens(USUARIO, TipoColecao.FAVORITOS, cheios);
+
+        assertThatThrownBy(() -> atual.alterar(List.of("mais-uma"), null))
+                .isInstanceOf(RequisicaoInvalidaException.class);
+    }
+
+    @Test
+    void itemNuloNaAlteracaoEhInvalido() {
+        var atual = ColecaoDoUsuario.vazia(USUARIO, TipoColecao.FAVORITOS);
+
+        assertThatThrownBy(() -> atual.alterar(Arrays.asList("vaso", null), null))
+                .isInstanceOf(RequisicaoInvalidaException.class);
+    }
+
+    @Test
     void favoritoPrecisaSerSlugValido() {
         assertThatThrownBy(() -> ColecaoDoUsuario.comItens(USUARIO, TipoColecao.FAVORITOS, List.of("Vaso de Barro!")))
                 .isInstanceOf(RequisicaoInvalidaException.class);

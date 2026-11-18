@@ -8,6 +8,7 @@ import br.com.balaio.community.shared.exception.RequisicaoInvalidaException;
 
 public final class Mediacao {
     public static final int TAMANHO_MAXIMO_ASSUNTO = 160;
+    public static final int MAXIMO_TENTATIVAS_ENTREGA = 10;
 
     private final UUID id;
     private final UUID pedidoId;
@@ -83,7 +84,32 @@ public final class Mediacao {
         atualizadaEm = agora;
     }
 
-    public void registrarFalhaNaEntrega(String motivo, OffsetDateTime agora) {
+    public void registrarFalhaTemporariaNaEntrega(String motivo, OffsetDateTime agora) {
+        contarFalha(motivo, agora);
+        if (tentativasEntrega >= MAXIMO_TENTATIVAS_ENTREGA) {
+            estado = EstadoMediacao.FALHA_ENTREGA;
+        }
+    }
+
+    public void registrarFalhaDefinitivaNaEntrega(String motivo, OffsetDateTime agora) {
+        contarFalha(motivo, agora);
+        estado = EstadoMediacao.FALHA_ENTREGA;
+    }
+
+    public boolean entregaFalhou() {
+        return estado == EstadoMediacao.FALHA_ENTREGA;
+    }
+
+    public void reabrirEntregaDaDecisao(OffsetDateTime agora) {
+        if (!entregaFalhou()) {
+            throw new ConflitoException("MEDIACAO_CONFLITANTE", "A entrega desta decisão não está em falha.");
+        }
+        estado = EstadoMediacao.DECISAO_PENDENTE;
+        tentativasEntrega = 0;
+        atualizadaEm = agora;
+    }
+
+    private void contarFalha(String motivo, OffsetDateTime agora) {
         tentativasEntrega++;
         ultimoErroEntrega = motivo;
         atualizadaEm = agora;

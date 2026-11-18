@@ -29,8 +29,20 @@ public class ColecaoService {
     @Transactional
     public List<String> substituir(UUID usuarioId, TipoColecao tipo, List<String> itens) {
         var colecao = ColecaoDoUsuario.comItens(usuarioId, tipo, itens);
+        colecoes.bloquear(usuarioId, tipo);
         colecoes.substituir(colecao);
         return colecao.itens();
+    }
+
+    @Transactional
+    public List<String> alterar(UUID usuarioId, TipoColecao tipo, List<String> adicionar, List<String> remover) {
+        colecoes.bloquear(usuarioId, tipo);
+        var atual = colecoes.carregar(usuarioId, tipo);
+        var alterada = atual.alterar(adicionar, remover);
+        if (!alterada.itens().equals(atual.itens())) {
+            colecoes.substituir(alterada);
+        }
+        return alterada.itens();
     }
 
     @Transactional(readOnly = true)
