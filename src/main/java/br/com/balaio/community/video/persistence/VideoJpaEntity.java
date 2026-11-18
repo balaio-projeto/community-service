@@ -14,7 +14,11 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 
+import org.hibernate.annotations.BatchSize;
+
+import br.com.balaio.community.shared.paginacao.Pagina;
 import br.com.balaio.community.video.domain.ArquivoMidia;
 import br.com.balaio.community.video.domain.SituacaoVideo;
 import br.com.balaio.community.video.domain.Video;
@@ -35,6 +39,7 @@ class VideoJpaEntity {
     private String legenda;
 
     @ElementCollection(fetch = FetchType.EAGER)
+    @BatchSize(size = Pagina.TAMANHO_MAXIMO)
     @CollectionTable(name = "video_etiquetas", joinColumns = @JoinColumn(name = "video_id"))
     @OrderColumn(name = "posicao")
     @Column(name = "etiqueta", nullable = false, length = 30)
@@ -70,6 +75,12 @@ class VideoJpaEntity {
     @Column(name = "publicado_em")
     private OffsetDateTime publicadoEm;
 
+    @Column(insertable = false, updatable = false)
+    private long visualizacoes;
+
+    @Version
+    private Long versao;
+
     protected VideoJpaEntity() {
     }
 
@@ -101,7 +112,7 @@ class VideoJpaEntity {
     Video paraDominio() {
         return Video.reconstituir(new Video.Dados(id, artesaoId, criadoEm, pecaSlug, legenda, etiquetas, duracao,
                 SituacaoVideo.deCodigo(situacao), arquivo(arquivoChave, arquivoTipo, arquivoTamanho),
-                arquivo(capaChave, capaTipo, capaTamanho), publicadoEm));
+                arquivo(capaChave, capaTipo, capaTamanho), publicadoEm, visualizacoes));
     }
 
     private static ArquivoMidia arquivo(String chave, String tipo, Long tamanho) {

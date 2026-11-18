@@ -5,6 +5,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -62,6 +63,25 @@ class ColecoesControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.dados.length()").value(1));
         verify(colecoes).substituir(usuario, TipoColecao.VIDEOS_SALVOS, List.of("v1", "v1"));
+    }
+
+    @Test
+    void patchAplicaSomenteODeltaDoItem() throws Exception {
+        when(colecoes.alterar(usuario, TipoColecao.VIDEOS_CURTIDOS, List.of("v2"), null)).thenReturn(List.of("v1", "v2"));
+
+        mvc.perform(patch("/api/v1/estado/videosCurtidos").with(logado()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"adicionar\":[\"v2\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dados[1]").value("v2"));
+        verify(colecoes).alterar(usuario, TipoColecao.VIDEOS_CURTIDOS, List.of("v2"), null);
+    }
+
+    @Test
+    void patchSemOperacaoEhInvalido() throws Exception {
+        mvc.perform(patch("/api/v1/estado/favoritos").with(logado()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(colecoes);
     }
 
     @Test

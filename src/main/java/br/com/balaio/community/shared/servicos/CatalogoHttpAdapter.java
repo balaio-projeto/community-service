@@ -13,6 +13,7 @@ import tools.jackson.databind.JsonNode;
 
 import br.com.balaio.community.shared.exception.ServicoIndisponivelException;
 import br.com.balaio.community.shared.integration.HttpClientes;
+import br.com.balaio.community.shared.integration.RespostaIncompativelException;
 
 @Component
 class CatalogoHttpAdapter implements CatalogoPort {
@@ -31,7 +32,7 @@ class CatalogoHttpAdapter implements CatalogoPort {
             return Optional.of(new PecaCatalogo(peca.path("slug").asString(), peca.path("artesao").asString()));
         } catch (HttpClientErrorException.NotFound naoEncontrada) {
             return Optional.empty();
-        } catch (RestClientException | IllegalStateException indisponivel) {
+        } catch (RestClientException | RespostaIncompativelException indisponivel) {
             throw new ServicoIndisponivelException("CATALOGO_INDISPONIVEL", "Não foi possível consultar a peça.");
         }
     }

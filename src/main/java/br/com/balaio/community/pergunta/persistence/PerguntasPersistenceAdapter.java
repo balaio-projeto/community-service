@@ -4,10 +4,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 import br.com.balaio.community.pergunta.application.port.out.PerguntasPort;
 import br.com.balaio.community.pergunta.domain.Pergunta;
+import br.com.balaio.community.shared.paginacao.Pagina;
 
 @Component
 class PerguntasPersistenceAdapter implements PerguntasPort {
@@ -28,8 +30,9 @@ class PerguntasPersistenceAdapter implements PerguntasPort {
     }
 
     @Override
-    public List<Pergunta> listarDaPeca(String pecaSlug) {
-        return repositorio.findByPecaSlugOrderByCriadaEmAsc(pecaSlug).stream()
+    public List<Pergunta> listarDaPeca(String pecaSlug, Pagina pagina) {
+        return repositorio.findByPecaSlugOrderByCriadaEmAsc(pecaSlug,
+                        PageRequest.of(pagina.numero(), pagina.tamanho())).stream()
                 .map(PerguntaJpaEntity::paraDominio).toList();
     }
 }

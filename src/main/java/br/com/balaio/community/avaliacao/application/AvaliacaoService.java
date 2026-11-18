@@ -28,7 +28,6 @@ public class AvaliacaoService {
         this.relogio = relogio;
     }
 
-    @Transactional
     public Avaliacao avaliar(UUID pedidoId, NovaAvaliacao nova, UsuarioAutenticado comprador) {
         comprador.exigirPapel(Papel.COMPRADOR);
         if (avaliacoes.existeParaPedido(pedidoId)) {

@@ -33,6 +33,7 @@ import br.com.balaio.community.mediacao.application.MediacaoService;
 import br.com.balaio.community.mediacao.domain.DecisaoMediacao;
 import br.com.balaio.community.mediacao.domain.Mediacao;
 import br.com.balaio.community.shared.config.WebConfig;
+import br.com.balaio.community.shared.paginacao.Pagina;
 import br.com.balaio.community.shared.security.SecurityConfig;
 import br.com.balaio.community.shared.security.UsuarioAutenticadoArgumentResolver;
 
@@ -85,12 +86,61 @@ class MediacoesControllerTest {
     @Test
     void compradorListaSomenteAsProprias() throws Exception {
         UUID comprador = UUID.randomUUID();
-        when(mediacoes.listarDoComprador(comprador)).thenReturn(List.of(mediacao(UUID.randomUUID(), comprador)));
+        when(mediacoes.listarDoComprador(comprador, Pagina.primeira()))
+                .thenReturn(List.of(mediacao(UUID.randomUUID(), comprador)));
 
         mvc.perform(get(URL).with(usuario("comprador", comprador)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.dados.length()").value(1));
-        verify(mediacoes).listarDoComprador(comprador);
+        verify(mediacoes).listarDoComprador(comprador, Pagina.primeira());
+    }
+
+    @Test
+    void administradorListaPaginadoEVeOMotivoDaFalhaDeEntrega() throws Exception {
+        var falhou = mediacaoComEntregaRecusada(UUID.randomUUID());
+        when(mediacoes.listarTodas(Pagina.de(2, 10))).thenReturn(List.of(falhou));
+
+        mvc.perform(get(URL).param("pagina", "2").param("tamanho", "10").with(usuario("admin")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dados[0].estado").value("falha_entrega"))
+                .andExpect(jsonPath("$.dados[0].ultimoErro").value("commerce recusou a decisão com HTTP 409"));
+    }
+
+    @Test
+    void compradorNaoVeDetalheTecnicoDaFalha() throws Exception {
+        UUID comprador = UUID.randomUUID();
+        when(mediacoes.listarDoComprador(comprador, Pagina.primeira()))
+                .thenReturn(List.of(mediacaoComEntregaRecusada(comprador)));
+
+        mvc.perform(get(URL).with(usuario("comprador", comprador)))
+                .andExpect(jsonPath("$.dados[0].estado").value("falha_entrega"))
+                .andExpect(jsonPath("$.dados[0].ultimoErro").isEmpty());
+    }
+
+    @Test
+    void tamanhoDePaginaAcimaDoLimiteRetorna400() throws Exception {
+        mvc.perform(get(URL).param("tamanho", "1000").with(usuario("admin")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erro.codigo").value("REQUISICAO_INVALIDA"));
+    }
+
+    @Test
+    void somenteAdministradorReprocessaEntrega() throws Exception {
+        mvc.perform(post(URL + "/" + UUID.randomUUID() + "/reprocessar-entrega").with(usuario("comprador")))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(entregas);
+    }
+
+    @Test
+    void reprocessamentoConfirmadoRetorna200() throws Exception {
+        var mediacao = mediacao(UUID.randomUUID(), UUID.randomUUID());
+        mediacao.registrarDecisao(DecisaoMediacao.NEGAR, CRIADA_EM);
+        mediacao.confirmarEntregaDaDecisao(CRIADA_EM);
+        when(entregas.reprocessar(mediacao.id())).thenReturn(mediacao);
+
+        mvc.perform(post(URL + "/" + mediacao.id() + "/reprocessar-entrega").with(usuario("admin")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dados.estado").value("decidida"));
     }
 
     @Test
@@ -144,6 +194,13 @@ class MediacoesControllerTest {
 
     private static String corpoAbertura(UUID pedido) {
         return "{\"pedido\":\"" + pedido + "\",\"assunto\":\"Peça quebrada\",\"relato\":\"Chegou trincada.\"}";
+    }
+
+    private static Mediacao mediacaoComEntregaRecusada(UUID comprador) {
+        var mediacao = mediacao(UUID.randomUUID(), comprador);
+        mediacao.registrarDecisao(DecisaoMediacao.NEGAR, CRIADA_EM);
+        mediacao.registrarFalhaDefinitivaNaEntrega("commerce recusou a decisão com HTTP 409", CRIADA_EM);
+        return mediacao;
     }
 
     private static Mediacao mediacao(UUID pedido, UUID comprador) {

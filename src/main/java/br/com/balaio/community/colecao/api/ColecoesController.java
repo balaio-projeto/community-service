@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -45,6 +46,19 @@ public class ColecoesController {
             @RequestBody Map<String, Object> corpo, UsuarioAutenticado usuario) {
         var tipo = tipo(colecao);
         return ApiResponse.sucesso(colecoes.substituir(usuario.id(), tipo, itensDoCorpo(corpo, tipo)));
+    }
+
+    @PatchMapping
+    @Operation(summary = "Adiciona e/ou remove itens sem reenviar a lista; seguro entre abas e dispositivos")
+    public ApiResponse<List<String>> alterar(@PathVariable String colecao,
+            @RequestBody AlteracaoColecaoRequest corpo, UsuarioAutenticado usuario) {
+        if (corpo == null || (corpo.adicionar() == null && corpo.remover() == null)) {
+            throw new RequisicaoInvalidaException("Informe itens para adicionar ou remover.");
+        }
+        return ApiResponse.sucesso(colecoes.alterar(usuario.id(), tipo(colecao), corpo.adicionar(), corpo.remover()));
+    }
+
+    record AlteracaoColecaoRequest(List<String> adicionar, List<String> remover) {
     }
 
     private static TipoColecao tipo(String codigo) {

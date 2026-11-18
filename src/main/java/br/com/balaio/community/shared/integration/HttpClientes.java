@@ -23,7 +23,7 @@ public final class HttpClientes {
 
     public static JsonNode dados(JsonNode envelope) {
         if (envelope == null || envelope.path("dados").isNull() || envelope.path("dados").isMissingNode()) {
-            throw new IllegalStateException("Resposta sem dados.");
+            throw new RespostaIncompativelException("Resposta sem o campo dados.");
         }
         return envelope.path("dados");
     }

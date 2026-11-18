@@ -50,7 +50,7 @@ class ConsultasCommerceClientTest {
         var cliente = clienteRespondendo(200, "{\"dados\":null,\"erro\":null}");
 
         assertThatThrownBy(() -> cliente.consultarPedido(UUID.randomUUID(), "token-comprador"))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(RespostaIncompativelException.class);
     }
 
     private ConsultasCommerceClient clienteRespondendo(int status, String corpo) throws IOException {

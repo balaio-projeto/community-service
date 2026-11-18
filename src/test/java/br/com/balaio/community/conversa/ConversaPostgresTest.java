@@ -1,6 +1,8 @@
 package br.com.balaio.community.conversa;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -60,5 +62,28 @@ class ConversaPostgresTest {
         assertThat(conversas.lerConversa(pedido.id(), artesao)).extracting(Mensagem::texto)
                 .containsExactly("Primeira", "Segunda");
         assertThat(conversas.conversasDoArtesao(artesao).getFirst().naoLida()).isFalse();
+    }
+
+    @Test
+    void painelAgregaUltimaMensagemELeituraDeVariosPedidos() {
+        var comprador = new UsuarioAutenticado(UUID.randomUUID(), Papel.COMPRADOR, "c");
+        var artesao = new UsuarioAutenticado(UUID.randomUUID(), Papel.ARTESAO, "a");
+        var lido = new PedidoDaConversa(UUID.randomUUID(), "Ana", "14/11/2026");
+        var pendente = new PedidoDaConversa(UUID.randomUUID(), "Bia", "15/11/2026");
+        var semMensagens = new PedidoDaConversa(UUID.randomUUID(), "Caio", "16/11/2026");
+        when(pedidos.parteNoPedido(any(), eq(comprador))).thenReturn(Optional.of(ParteDaConversa.COMPRADOR));
+        when(pedidos.parteNoPedido(any(), eq(artesao))).thenReturn(Optional.of(ParteDaConversa.ARTESAO));
+        when(pedidos.vendasDoArtesao(artesao)).thenReturn(List.of(lido, pendente, semMensagens));
+
+        conversas.enviar(lido.id(), "Antiga", comprador);
+        conversas.enviar(lido.id(), "Recente", comprador);
+        conversas.enviar(pendente.id(), "Oi", comprador);
+        conversas.confirmarLeitura(lido.id(), artesao);
+
+        var resumos = conversas.conversasDoArtesao(artesao);
+
+        assertThat(resumos).extracting(r -> r.ultimaMensagem().map(Mensagem::texto).orElse(null))
+                .containsExactly("Recente", "Oi", null);
+        assertThat(resumos).extracting(r -> r.naoLida()).containsExactly(false, true, false);
     }
 }

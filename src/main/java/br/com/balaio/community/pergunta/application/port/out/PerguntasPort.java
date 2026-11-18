@@ -5,11 +5,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 import br.com.balaio.community.pergunta.domain.Pergunta;
+import br.com.balaio.community.shared.paginacao.Pagina;
 
 public interface PerguntasPort {
     Pergunta salvar(Pergunta pergunta);
 
     Optional<Pergunta> buscar(UUID id);
 
-    List<Pergunta> listarDaPeca(String pecaSlug);
+    List<Pergunta> listarDaPeca(String pecaSlug, Pagina pagina);
 }

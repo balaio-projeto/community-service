@@ -1,9 +1,12 @@
 package br.com.balaio.community.conversa.api;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -65,6 +68,16 @@ class ConversasControllerTest {
         mvc.perform(get("/api/v1/pedidos/" + UUID.randomUUID() + "/conversa").with(usuario("artesao")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.dados").isEmpty());
+    }
+
+    @Test
+    void confirmacaoDeLeituraRetorna204() throws Exception {
+        UUID pedido = UUID.randomUUID();
+
+        mvc.perform(post("/api/v1/pedidos/" + pedido + "/conversa/leitura").with(usuario("artesao")))
+                .andExpect(status().isNoContent());
+
+        verify(conversas).confirmarLeitura(eq(pedido), any());
     }
 
     @Test

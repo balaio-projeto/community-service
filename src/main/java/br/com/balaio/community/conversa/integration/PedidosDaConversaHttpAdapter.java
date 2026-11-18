@@ -20,6 +20,7 @@ import br.com.balaio.community.conversa.domain.PedidoDaConversa;
 import br.com.balaio.community.shared.exception.ServicoIndisponivelException;
 import br.com.balaio.community.shared.integration.ConsultasCommerceClient;
 import br.com.balaio.community.shared.integration.HttpClientes;
+import br.com.balaio.community.shared.integration.RespostaIncompativelException;
 import br.com.balaio.community.shared.security.Papel;
 import br.com.balaio.community.shared.security.UsuarioAutenticado;
 
@@ -56,7 +57,7 @@ class PedidosDaConversaHttpAdapter implements PedidosDaConversaPort {
                     .map(venda -> new PedidoDaConversa(UUID.fromString(venda.path("id").asString()),
                             venda.path("compradorNome").asString(), venda.path("data").asString()))
                     .toList();
-        } catch (RestClientException | IllegalStateException | IllegalArgumentException indisponivel) {
+        } catch (RestClientException | RespostaIncompativelException | IllegalArgumentException indisponivel) {
             throw commerceIndisponivel();
         }
     }
@@ -67,7 +68,7 @@ class PedidosDaConversaHttpAdapter implements PedidosDaConversaPort {
             return true;
         } catch (HttpClientErrorException.NotFound | HttpClientErrorException.Forbidden naoEhDele) {
             return false;
-        } catch (RestClientException | IllegalStateException indisponivel) {
+        } catch (RestClientException | RespostaIncompativelException indisponivel) {
             throw commerceIndisponivel();
         }
     }

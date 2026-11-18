@@ -39,7 +39,8 @@ public class ConversasController {
     }
 
     @GetMapping("/api/v1/pedidos/{pedidoId}/conversa")
-    @Operation(summary = "Lê a conversa do pedido e marca como lida; só comprador e artesão do pedido")
+    @Operation(summary = "Lê a conversa do pedido; só comprador e artesão do pedido. "
+            + "Ainda marca como lida por compatibilidade — prefira POST /leitura")
     public ApiResponse<List<MensagemResponse>> ler(@PathVariable UUID pedidoId, UsuarioAutenticado usuario) {
         return ApiResponse.sucesso(conversas.lerConversa(pedidoId, usuario).stream()
                 .map(MensagemResponse::de).toList());
@@ -51,6 +52,13 @@ public class ConversasController {
             @RequestBody NovaMensagemRequest corpo, UsuarioAutenticado usuario) {
         var mensagem = conversas.enviar(pedidoId, corpo.texto(), usuario);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.sucesso(MensagemResponse.de(mensagem)));
+    }
+
+    @PostMapping("/api/v1/pedidos/{pedidoId}/conversa/leitura")
+    @Operation(summary = "Confirma que o usuário leu a conversa do pedido até agora")
+    public ResponseEntity<Void> confirmarLeitura(@PathVariable UUID pedidoId, UsuarioAutenticado usuario) {
+        conversas.confirmarLeitura(pedidoId, usuario);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/api/v1/artesao/conversas")

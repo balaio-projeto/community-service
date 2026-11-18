@@ -18,6 +18,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import br.com.balaio.community.shared.exception.NaoAutenticadoException;
 import br.com.balaio.community.shared.exception.RecursoNaoEncontradoException;
 import br.com.balaio.community.shared.exception.RequisicaoInvalidaException;
+import br.com.balaio.community.shared.paginacao.Pagina;
 import br.com.balaio.community.shared.security.Papel;
 import br.com.balaio.community.shared.security.UsuarioAutenticado;
 import br.com.balaio.community.shared.servicos.CatalogoPort;
@@ -54,11 +55,19 @@ public class VideoService {
     }
 
     @Transactional(readOnly = true)
-    public List<VideoComNumeros> listar(boolean painel, Optional<UsuarioAutenticado> usuario) {
+    public List<VideoComNumeros> listar(boolean painel, Optional<UsuarioAutenticado> usuario, Pagina pagina) {
         var lista = painel
-                ? videos.listarDoArtesao(exigirArtesao(usuario).id())
-                : videos.listarPublicados();
+                ? videos.listarDoArtesao(exigirArtesao(usuario).id(), pagina)
+                : videos.listarPublicados(pagina);
         return comNumeros(lista);
+    }
+
+    @Transactional
+    public void registrarVisualizacao(UUID id, Optional<UsuarioAutenticado> espectador) {
+        var video = visivel(id, espectador);
+        if (video.contaVisualizacaoDe(espectador.map(UsuarioAutenticado::id).orElse(null))) {
+            videos.registrarVisualizacao(id);
+        }
     }
 
     @Transactional(readOnly = true)

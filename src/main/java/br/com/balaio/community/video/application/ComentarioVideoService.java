@@ -35,7 +35,6 @@ public class ComentarioVideoService {
         return comentarios.listarDoVideo(videoId);
     }
 
-    @Transactional
     public ComentarioVideo comentar(UUID videoId, String texto, UsuarioAutenticado autor) {
         var video = videos.visivel(videoId, Optional.of(autor));
         String nome = perfis.nomeDoUsuario(autor.token());

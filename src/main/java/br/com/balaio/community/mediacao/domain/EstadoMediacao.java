@@ -6,7 +6,8 @@ public enum EstadoMediacao {
     ABERTA("aberta"),
     EM_ANALISE("emAnalise"),
     DECISAO_PENDENTE("decisao_pendente"),
-    DECIDIDA("decidida");
+    DECIDIDA("decidida"),
+    FALHA_ENTREGA("falha_entrega");
 
     private final String codigo;
 

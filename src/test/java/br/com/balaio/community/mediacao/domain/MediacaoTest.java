@@ -77,7 +77,7 @@ class MediacaoTest {
         var mediacao = novaMediacao();
         mediacao.registrarDecisao(DecisaoMediacao.MANTER_CONVERSA, AGORA);
 
-        mediacao.registrarFalhaNaEntrega("ResourceAccessException", AGORA);
+        mediacao.registrarFalhaTemporariaNaEntrega("ResourceAccessException", AGORA);
         assertThat(mediacao.tentativasEntrega()).isEqualTo(1);
         assertThat(mediacao.aguardaEntregaDaDecisao()).isTrue();
 
@@ -85,6 +85,47 @@ class MediacaoTest {
         assertThat(mediacao.estado()).isEqualTo(EstadoMediacao.DECIDIDA);
         assertThat(mediacao.tentativasEntrega()).isZero();
         assertThat(mediacao.ultimoErroEntrega()).isNull();
+    }
+
+    @Test
+    void decimaFalhaTemporariaEncerraAsTentativasAutomaticas() {
+        var mediacao = novaMediacao();
+        mediacao.registrarDecisao(DecisaoMediacao.NEGAR, AGORA);
+
+        for (int falha = 1; falha < Mediacao.MAXIMO_TENTATIVAS_ENTREGA; falha++) {
+            mediacao.registrarFalhaTemporariaNaEntrega("HTTP 503", AGORA);
+        }
+        assertThat(mediacao.aguardaEntregaDaDecisao()).isTrue();
+
+        mediacao.registrarFalhaTemporariaNaEntrega("HTTP 503", AGORA);
+        assertThat(mediacao.estado()).isEqualTo(EstadoMediacao.FALHA_ENTREGA);
+        assertThat(mediacao.aguardaEntregaDaDecisao()).isFalse();
+    }
+
+    @Test
+    void reaberturaDaEntregaPreservaDecisaoEIdentificador() {
+        var mediacao = novaMediacao();
+        mediacao.registrarDecisao(DecisaoMediacao.CANCELAR_REEMBOLSAR, AGORA);
+        var decisaoId = mediacao.decisaoId();
+        mediacao.registrarFalhaDefinitivaNaEntrega("HTTP 409", AGORA);
+
+        mediacao.reabrirEntregaDaDecisao(AGORA);
+
+        assertThat(mediacao.estado()).isEqualTo(EstadoMediacao.DECISAO_PENDENTE);
+        assertThat(mediacao.tentativasEntrega()).isZero();
+        assertThat(mediacao.decisaoId()).isEqualTo(decisaoId);
+        assertThat(mediacao.decisao()).isEqualTo(DecisaoMediacao.CANCELAR_REEMBOLSAR);
+    }
+
+    @Test
+    void mediacaoEmFalhaNaoVoltaParaAnalise() {
+        var mediacao = novaMediacao();
+        mediacao.registrarDecisao(DecisaoMediacao.NEGAR, AGORA);
+        mediacao.registrarFalhaDefinitivaNaEntrega("HTTP 409", AGORA);
+
+        assertThatThrownBy(() -> mediacao.iniciarAnalise(AGORA)).isInstanceOf(ConflitoException.class);
+        assertThatThrownBy(() -> mediacao.registrarDecisao(DecisaoMediacao.CANCELAR_REEMBOLSAR, AGORA))
+                .isInstanceOf(ConflitoException.class);
     }
 
     @Test

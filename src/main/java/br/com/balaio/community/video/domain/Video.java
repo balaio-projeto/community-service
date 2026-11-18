@@ -27,6 +27,7 @@ public final class Video {
     private ArquivoMidia arquivo;
     private ArquivoMidia capa;
     private OffsetDateTime publicadoEm;
+    private final long visualizacoes;
 
     private Video(Dados dados) {
         this.id = dados.id();
@@ -40,12 +41,13 @@ public final class Video {
         this.arquivo = dados.arquivo();
         this.capa = dados.capa();
         this.publicadoEm = dados.publicadoEm();
+        this.visualizacoes = dados.visualizacoes();
     }
 
     public static Video rascunho(UUID artesaoId, String pecaSlug, String legenda, List<String> etiquetas,
             String duracao, OffsetDateTime agora) {
         return new Video(new Dados(UUID.randomUUID(), artesaoId, agora, pecaSlug, legendaValida(legenda),
-                etiquetasValidas(etiquetas), duracaoValida(duracao), SituacaoVideo.RASCUNHO, null, null, null));
+                etiquetasValidas(etiquetas), duracaoValida(duracao), SituacaoVideo.RASCUNHO, null, null, null, 0));
     }
 
     public static Video reconstituir(Dados dados) {
@@ -104,6 +106,11 @@ public final class Video {
     public ArquivoMidia arquivo() { return arquivo; }
     public ArquivoMidia capa() { return capa; }
     public OffsetDateTime publicadoEm() { return publicadoEm; }
+    public long visualizacoes() { return visualizacoes; }
+
+    public boolean contaVisualizacaoDe(UUID espectadorId) {
+        return situacao == SituacaoVideo.PUBLICADA && !pertenceA(espectadorId);
+    }
 
     private static String legendaValida(String legenda) {
         if (legenda == null || legenda.isBlank()) {
@@ -142,6 +149,6 @@ public final class Video {
 
     public record Dados(UUID id, UUID artesaoId, OffsetDateTime criadoEm, String pecaSlug, String legenda,
             List<String> etiquetas, String duracao, SituacaoVideo situacao, ArquivoMidia arquivo, ArquivoMidia capa,
-            OffsetDateTime publicadoEm) {
+            OffsetDateTime publicadoEm, long visualizacoes) {
     }
 }

@@ -17,7 +17,9 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionOperations;
 
+import br.com.balaio.community.shared.paginacao.Pagina;
 import br.com.balaio.community.shared.servicos.CatalogoPort;
 import br.com.balaio.community.shared.servicos.CatalogoPort.PecaCatalogo;
 import br.com.balaio.community.shared.servicos.PerfilPort;
@@ -44,7 +46,8 @@ class PerguntaServiceTest {
     void preparar() {
         catalogo = mock(CatalogoPort.class);
         perfis = mock(PerfilPort.class);
-        perguntas = new PerguntaService(new PerguntasEmMemoria(), catalogo, perfis, RELOGIO);
+        perguntas = new PerguntaService(new PerguntasEmMemoria(), catalogo, perfis,
+                TransactionOperations.withoutTransaction(), RELOGIO);
         when(catalogo.buscar(any(), any())).thenReturn(Optional.empty());
         when(catalogo.buscar(org.mockito.ArgumentMatchers.eq(PECA), any()))
                 .thenReturn(Optional.of(new PecaCatalogo(PECA, "artesao-" + artesaoDono)));
@@ -57,14 +60,14 @@ class PerguntaServiceTest {
 
         assertThat(criada.autorNome()).isEqualTo("Ana");
         assertThat(criada.autorId()).isEqualTo(comprador.id());
-        assertThat(perguntas.listarDaPeca(PECA)).extracting(Pergunta::id).containsExactly(criada.id());
+        assertThat(perguntas.listarDaPeca(PECA, Pagina.primeira())).extracting(Pergunta::id).containsExactly(criada.id());
     }
 
     @Test
     void pecaInexistenteRetornaNaoEncontradaSemConsultarPerfil() {
         assertThatThrownBy(() -> perguntas.perguntar("nao-existe", "Oi?", comprador))
                 .isInstanceOf(RecursoNaoEncontradoException.class);
-        assertThatThrownBy(() -> perguntas.listarDaPeca("nao-existe"))
+        assertThatThrownBy(() -> perguntas.listarDaPeca("nao-existe", Pagina.primeira()))
                 .isInstanceOf(RecursoNaoEncontradoException.class);
         verifyNoInteractions(perfis);
     }
@@ -116,8 +119,9 @@ class PerguntaServiceTest {
         }
 
         @Override
-        public List<Pergunta> listarDaPeca(String pecaSlug) {
-            return armazenadas.stream().filter(pergunta -> pergunta.pertenceAPeca(pecaSlug)).toList();
+        public List<Pergunta> listarDaPeca(String pecaSlug, Pagina pagina) {
+            return armazenadas.stream().filter(pergunta -> pergunta.pertenceAPeca(pecaSlug))
+                    .skip(pagina.deslocamento()).limit(pagina.tamanho()).toList();
         }
     }
 }

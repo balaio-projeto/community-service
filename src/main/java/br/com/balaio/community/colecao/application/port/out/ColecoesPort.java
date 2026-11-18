@@ -8,6 +8,8 @@ import br.com.balaio.community.colecao.domain.ColecaoDoUsuario;
 import br.com.balaio.community.colecao.domain.TipoColecao;
 
 public interface ColecoesPort {
+    void bloquear(UUID usuarioId, TipoColecao tipo);
+
     ColecaoDoUsuario carregar(UUID usuarioId, TipoColecao tipo);
 
     void substituir(ColecaoDoUsuario colecao);

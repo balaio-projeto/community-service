@@ -20,6 +20,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import br.com.balaio.community.shared.paginacao.Pagina;
 import br.com.balaio.community.pergunta.application.PerguntaService;
 import br.com.balaio.community.shared.servicos.CatalogoPort;
 import br.com.balaio.community.shared.servicos.CatalogoPort.PecaCatalogo;
@@ -56,7 +57,7 @@ class PerguntaPostgresTest {
         perguntas.perguntar("vaso", "Segunda?", comprador);
         perguntas.responder("vaso", primeira.id(), "Resposta.", new UsuarioAutenticado(artesao, Papel.ARTESAO, "t"));
 
-        var lista = perguntas.listarDaPeca("vaso");
+        var lista = perguntas.listarDaPeca("vaso", Pagina.primeira());
         assertThat(lista).extracting(p -> p.texto()).containsExactly("Primeira?", "Segunda?");
         assertThat(lista.getFirst().resposta()).isEqualTo("Resposta.");
         assertThat(lista.getFirst().respondidaEm()).isNotNull();

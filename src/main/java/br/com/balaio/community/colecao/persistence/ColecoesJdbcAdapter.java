@@ -23,6 +23,13 @@ class ColecoesJdbcAdapter implements ColecoesPort {
     }
 
     @Override
+    public void bloquear(UUID usuarioId, TipoColecao tipo) {
+        jdbc.sql("SELECT pg_advisory_xact_lock(hashtextextended(:chave, 0))")
+                .param("chave", "colecao:" + usuarioId + ":" + tipo.codigo())
+                .query().listOfRows();
+    }
+
+    @Override
     public ColecaoDoUsuario carregar(UUID usuarioId, TipoColecao tipo) {
         var itens = jdbc.sql("""
                 SELECT valor FROM itens_colecao
