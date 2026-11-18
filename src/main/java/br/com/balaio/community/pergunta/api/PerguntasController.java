@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,6 +21,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import br.com.balaio.community.pergunta.application.PerguntaService;
 import br.com.balaio.community.shared.api.ApiResponse;
 import br.com.balaio.community.shared.config.OpenApiConfig;
+import br.com.balaio.community.shared.paginacao.Pagina;
 import br.com.balaio.community.shared.security.UsuarioAutenticado;
 
 @RestController
@@ -33,9 +35,12 @@ public class PerguntasController {
     }
 
     @GetMapping
-    @Operation(summary = "Lista as perguntas públicas de uma peça")
-    public ApiResponse<List<PerguntaResponse>> listar(@PathVariable String slug) {
-        return ApiResponse.sucesso(perguntas.listarDaPeca(slug).stream().map(PerguntaResponse::de).toList());
+    @Operation(summary = "Lista as perguntas públicas de uma peça (paginado, mais antigas primeiro)")
+    public ApiResponse<List<PerguntaResponse>> listar(@PathVariable String slug,
+            @RequestParam(defaultValue = "0") int pagina,
+            @RequestParam(defaultValue = "" + Pagina.TAMANHO_PADRAO) int tamanho) {
+        return ApiResponse.sucesso(perguntas.listarDaPeca(slug, Pagina.de(pagina, tamanho)).stream()
+                .map(PerguntaResponse::de).toList());
     }
 
     @PostMapping

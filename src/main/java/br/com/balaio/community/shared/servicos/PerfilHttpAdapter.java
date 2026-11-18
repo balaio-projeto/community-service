@@ -12,6 +12,7 @@ import tools.jackson.databind.JsonNode;
 import br.com.balaio.community.shared.exception.NaoAutenticadoException;
 import br.com.balaio.community.shared.exception.ServicoIndisponivelException;
 import br.com.balaio.community.shared.integration.HttpClientes;
+import br.com.balaio.community.shared.integration.RespostaIncompativelException;
 
 @Component
 class PerfilHttpAdapter implements PerfilPort {
@@ -30,7 +31,7 @@ class PerfilHttpAdapter implements PerfilPort {
             return usuario.path("nome").asString();
         } catch (HttpClientErrorException.Unauthorized sessaoInvalida) {
             throw new NaoAutenticadoException();
-        } catch (RestClientException | IllegalStateException indisponivel) {
+        } catch (RestClientException | RespostaIncompativelException indisponivel) {
             throw new ServicoIndisponivelException("PERFIL_INDISPONIVEL", "Não foi possível consultar o perfil.");
         }
     }

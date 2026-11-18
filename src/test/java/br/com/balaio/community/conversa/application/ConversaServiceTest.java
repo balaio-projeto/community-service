@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +20,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionOperations;
 
 import br.com.balaio.community.conversa.application.port.out.MensagensPort;
 import br.com.balaio.community.conversa.application.port.out.PedidosDaConversaPort;
@@ -44,7 +46,8 @@ class ConversaServiceTest {
     @BeforeEach
     void preparar() {
         pedidos = mock(PedidosDaConversaPort.class);
-        conversas = new ConversaService(new MensagensEmMemoria(), pedidos, RELOGIO);
+        conversas = new ConversaService(new MensagensEmMemoria(), pedidos, TransactionOperations.withoutTransaction(),
+                RELOGIO);
         when(pedidos.parteNoPedido(any(), any())).thenReturn(Optional.empty());
         when(pedidos.parteNoPedido(pedido.id(), comprador)).thenReturn(Optional.of(ParteDaConversa.COMPRADOR));
         when(pedidos.parteNoPedido(pedido.id(), artesao)).thenReturn(Optional.of(ParteDaConversa.ARTESAO));
@@ -92,6 +95,24 @@ class ConversaServiceTest {
     }
 
     @Test
+    void confirmacaoExplicitaDeLeituraZeraPendenciaDoArtesao() {
+        conversas.enviar(pedido.id(), "Chegou?", comprador);
+        assertThat(conversas.conversasDoArtesao(artesao).getFirst().naoLida()).isTrue();
+
+        conversas.confirmarLeitura(pedido.id(), artesao);
+
+        assertThat(conversas.conversasDoArtesao(artesao).getFirst().naoLida()).isFalse();
+    }
+
+    @Test
+    void terceiroNaoConfirmaLeitura() {
+        var intruso = new UsuarioAutenticado(UUID.randomUUID(), Papel.COMPRADOR, "x");
+
+        assertThatThrownBy(() -> conversas.confirmarLeitura(pedido.id(), intruso))
+                .isInstanceOf(RecursoNaoEncontradoException.class);
+    }
+
+    @Test
     void compradorNaoAcessaPainelDeConversas() {
         assertThatThrownBy(() -> conversas.conversasDoArtesao(comprador)).isInstanceOf(AcessoNegadoException.class);
     }
@@ -112,9 +133,10 @@ class ConversaServiceTest {
         }
 
         @Override
-        public Optional<Mensagem> ultimaDoPedido(UUID pedidoId) {
-            var doPedido = listarDoPedido(pedidoId);
-            return doPedido.isEmpty() ? Optional.empty() : Optional.of(doPedido.getLast());
+        public Map<UUID, Mensagem> ultimasDosPedidos(Collection<UUID> pedidoIds) {
+            var ultimas = new HashMap<UUID, Mensagem>();
+            mensagens.stream().filter(m -> pedidoIds.contains(m.pedidoId())).forEach(m -> ultimas.put(m.pedidoId(), m));
+            return ultimas;
         }
 
         @Override
@@ -123,8 +145,11 @@ class ConversaServiceTest {
         }
 
         @Override
-        public Optional<OffsetDateTime> ultimaLeitura(UUID pedidoId, UUID leitorId) {
-            return Optional.ofNullable(leituras.get(pedidoId + ":" + leitorId));
+        public Map<UUID, OffsetDateTime> leiturasDoLeitor(Collection<UUID> pedidoIds, UUID leitorId) {
+            var doLeitor = new HashMap<UUID, OffsetDateTime>();
+            pedidoIds.forEach(id -> Optional.ofNullable(leituras.get(id + ":" + leitorId))
+                    .ifPresent(lida -> doLeitor.put(id, lida)));
+            return doLeitor;
         }
     }
 }

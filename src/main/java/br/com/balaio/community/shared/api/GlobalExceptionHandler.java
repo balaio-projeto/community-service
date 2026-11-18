@@ -1,6 +1,7 @@
 package br.com.balaio.community.shared.api;
 
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -61,6 +62,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiResponse<Void>> rotaInexistente() {
         return responder(HttpStatus.NOT_FOUND, "RECURSO_NAO_ENCONTRADO", "Recurso não encontrado.");
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> alteracaoConcorrente() {
+        return responder(HttpStatus.CONFLICT, "ALTERACAO_CONCORRENTE",
+                "O recurso foi alterado por outra requisição. Recarregue e tente novamente.");
     }
 
     @ExceptionHandler(DataAccessException.class)

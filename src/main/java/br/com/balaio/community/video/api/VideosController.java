@@ -26,6 +26,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 
 import br.com.balaio.community.shared.api.ApiResponse;
+import br.com.balaio.community.shared.paginacao.Pagina;
 import br.com.balaio.community.shared.security.UsuarioAutenticado;
 import br.com.balaio.community.video.application.ComentarioVideoService;
 import br.com.balaio.community.video.application.VideoService;
@@ -46,10 +47,13 @@ public class VideosController {
     }
 
     @GetMapping
-    @Operation(summary = "Vídeos publicados; com painel=true, todos os vídeos do artesão autenticado")
+    @Operation(summary = "Vídeos publicados; com painel=true, todos os vídeos do artesão autenticado (paginado)")
     public ApiResponse<List<VideoResponse>> listar(@RequestParam(defaultValue = "false") boolean painel,
+            @RequestParam(defaultValue = "0") int pagina,
+            @RequestParam(defaultValue = "" + Pagina.TAMANHO_PADRAO) int tamanho,
             Optional<UsuarioAutenticado> usuario) {
-        return ApiResponse.sucesso(videos.listar(painel, usuario).stream().map(VideoResponse::de).toList());
+        return ApiResponse.sucesso(videos.listar(painel, usuario, Pagina.de(pagina, tamanho)).stream()
+                .map(VideoResponse::de).toList());
     }
 
     @GetMapping("/{id}")
@@ -110,6 +114,13 @@ public class VideosController {
             @RequestHeader(value = HttpHeaders.RANGE, required = false) String range,
             Optional<UsuarioAutenticado> usuario) {
         return EntregaDeMidia.responder(videos.abrirMidia(id, TipoMidia.CAPA, usuario), range);
+    }
+
+    @PostMapping("/{id}/visualizacoes")
+    @Operation(summary = "Registra uma reprodução iniciada; o player deve chamar uma vez por sessão de exibição")
+    public ResponseEntity<Void> registrarVisualizacao(@PathVariable UUID id, Optional<UsuarioAutenticado> usuario) {
+        videos.registrarVisualizacao(id, usuario);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{id}/comentarios")

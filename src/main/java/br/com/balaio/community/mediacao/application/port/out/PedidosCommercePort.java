@@ -11,9 +11,24 @@ public interface PedidosCommercePort {
 
     void aplicarDecisao(UUID pedidoId, UUID decisaoId, DecisaoMediacao decisao);
 
-    class EntregaRecusadaException extends RuntimeException {
-        public EntregaRecusadaException(String motivo, Throwable causa) {
+    class FalhaNaEntregaException extends RuntimeException {
+        private final boolean admiteNovaTentativa;
+
+        private FalhaNaEntregaException(String motivo, boolean admiteNovaTentativa, Throwable causa) {
             super(motivo, causa);
+            this.admiteNovaTentativa = admiteNovaTentativa;
+        }
+
+        public static FalhaNaEntregaException temporaria(String motivo, Throwable causa) {
+            return new FalhaNaEntregaException(motivo, true, causa);
+        }
+
+        public static FalhaNaEntregaException definitiva(String motivo, Throwable causa) {
+            return new FalhaNaEntregaException(motivo, false, causa);
+        }
+
+        public boolean admiteNovaTentativa() {
+            return admiteNovaTentativa;
         }
     }
 }

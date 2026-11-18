@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import br.com.balaio.community.mediacao.domain.Mediacao;
+import br.com.balaio.community.shared.paginacao.Pagina;
 
 public interface MediacoesPort {
     boolean existeParaPedido(UUID pedidoId);
@@ -17,9 +18,9 @@ public interface MediacoesPort {
 
     Optional<Mediacao> buscarParaAtualizar(UUID id);
 
-    List<Mediacao> listarTodas();
+    List<Mediacao> listarTodas(Pagina pagina);
 
-    List<Mediacao> listarDoComprador(UUID compradorId);
+    List<Mediacao> listarDoComprador(UUID compradorId, Pagina pagina);
 
-    List<UUID> idsAguardandoEntrega(int maximoTentativas, int limite);
+    List<UUID> idsAguardandoEntrega(int limite);
 }

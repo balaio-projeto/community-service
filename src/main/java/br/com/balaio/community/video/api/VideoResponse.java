@@ -19,7 +19,8 @@ public record VideoResponse(UUID id, String artesao, String peca, String legenda
         var video = detalhado.video();
         String base = "/api/v1/videos/" + video.id();
         return new VideoResponse(video.id(), UsuarioAutenticado.PREFIXO_SLUG_ARTESAO + video.artesaoId(),
-                video.pecaSlug(), video.legenda(), video.etiquetas(), video.duracao(), 0, detalhado.curtidas(),
+                video.pecaSlug(), video.legenda(), video.etiquetas(), video.duracao(), video.visualizacoes(),
+                detalhado.curtidas(),
                 detalhado.comentarios(),
                 video.situacao() == SituacaoVideo.RASCUNHO || video.publicadoEm() == null
                         ? ROTULO_RASCUNHO : video.publicadoEm().format(FORMATO_DATA),

@@ -3,8 +3,10 @@ package br.com.balaio.community.conversa.persistence;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -41,10 +43,16 @@ class MensagensJdbcAdapter implements MensagensPort {
     }
 
     @Override
-    public Optional<Mensagem> ultimaDoPedido(UUID pedidoId) {
-        return jdbc.sql("SELECT " + COLUNAS + " FROM mensagens_pedido WHERE pedido_id = :pedido "
-                        + "ORDER BY enviada_em DESC LIMIT 1")
-                .param("pedido", pedidoId).query(MensagensJdbcAdapter::mensagem).optional();
+    public Map<UUID, Mensagem> ultimasDosPedidos(Collection<UUID> pedidoIds) {
+        if (pedidoIds.isEmpty()) {
+            return Map.of();
+        }
+        var ultimas = new HashMap<UUID, Mensagem>();
+        jdbc.sql("SELECT DISTINCT ON (pedido_id) " + COLUNAS + " FROM mensagens_pedido "
+                        + "WHERE pedido_id IN (:pedidos) ORDER BY pedido_id, enviada_em DESC")
+                .param("pedidos", List.copyOf(pedidoIds)).query(MensagensJdbcAdapter::mensagem).list()
+                .forEach(mensagem -> ultimas.put(mensagem.pedidoId(), mensagem));
+        return ultimas;
     }
 
     @Override
@@ -59,10 +67,17 @@ class MensagensJdbcAdapter implements MensagensPort {
     }
 
     @Override
-    public Optional<OffsetDateTime> ultimaLeitura(UUID pedidoId, UUID leitorId) {
-        return jdbc.sql("SELECT lida_em FROM leituras_conversa WHERE pedido_id = :pedido AND leitor_id = :leitor")
-                .param("pedido", pedidoId).param("leitor", leitorId)
-                .query((rs, linha) -> rs.getObject("lida_em", OffsetDateTime.class)).optional();
+    public Map<UUID, OffsetDateTime> leiturasDoLeitor(Collection<UUID> pedidoIds, UUID leitorId) {
+        if (pedidoIds.isEmpty()) {
+            return Map.of();
+        }
+        var leituras = new HashMap<UUID, OffsetDateTime>();
+        jdbc.sql("SELECT pedido_id, lida_em FROM leituras_conversa WHERE leitor_id = :leitor AND pedido_id IN (:pedidos)")
+                .param("leitor", leitorId).param("pedidos", List.copyOf(pedidoIds))
+                .query((rs, linha) -> leituras.put(rs.getObject("pedido_id", UUID.class),
+                        rs.getObject("lida_em", OffsetDateTime.class)))
+                .list();
+        return leituras;
     }
 
     private static Mensagem mensagem(ResultSet rs, int linha) throws SQLException {

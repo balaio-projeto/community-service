@@ -30,6 +30,30 @@ public record ColecaoDoUsuario(UUID usuarioId, TipoColecao tipo, List<String> it
         return new ColecaoDoUsuario(usuarioId, tipo, limitar(tipo, itens));
     }
 
+    public ColecaoDoUsuario alterar(List<String> adicionar, List<String> remover) {
+        var aRemover = normalizados(remover);
+        var aAdicionar = normalizados(adicionar);
+        var resultado = new LinkedHashSet<String>();
+        if (tipo.descartaExcesso()) {
+            resultado.addAll(aAdicionar);
+        }
+        itens.stream().filter(item -> !aRemover.contains(item)).forEach(resultado::add);
+        if (!tipo.descartaExcesso()) {
+            resultado.addAll(aAdicionar);
+        }
+        return comItens(usuarioId, tipo, List.copyOf(resultado));
+    }
+
+    private static List<String> normalizados(List<String> recebidos) {
+        if (recebidos == null) {
+            return List.of();
+        }
+        if (recebidos.stream().anyMatch(Objects::isNull)) {
+            throw new RequisicaoInvalidaException("Estado inválido.");
+        }
+        return recebidos.stream().map(String::strip).filter(item -> !item.isEmpty()).distinct().toList();
+    }
+
     private static List<String> limitar(TipoColecao tipo, List<String> itens) {
         if (itens.size() <= tipo.quantidadeMaxima()) {
             return itens;

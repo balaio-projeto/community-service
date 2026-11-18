@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,6 +27,7 @@ import br.com.balaio.community.mediacao.domain.Mediacao;
 import br.com.balaio.community.shared.api.ApiResponse;
 import br.com.balaio.community.shared.config.OpenApiConfig;
 import br.com.balaio.community.shared.exception.RequisicaoInvalidaException;
+import br.com.balaio.community.shared.paginacao.Pagina;
 import br.com.balaio.community.shared.security.Papel;
 import br.com.balaio.community.shared.security.UsuarioAutenticado;
 
@@ -49,13 +51,22 @@ public class MediacoesController {
         usuario.exigirPapel(Papel.COMPRADOR);
         var mediacao = mediacoes.abrir(new AberturaMediacao(corpo.pedido(), usuario.id(), corpo.assunto(),
                 corpo.relato(), usuario.token()));
-        return ResponseEntity.status(HttpStatus.CREATED).body(responder(mediacao));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.sucesso(MediacaoResponse.paraComprador(mediacao)));
     }
 
     @GetMapping
-    @Operation(summary = "Comprador vê as próprias mediações; administrador vê todas")
-    public ApiResponse<List<MediacaoResponse>> listar(UsuarioAutenticado usuario) {
-        return ApiResponse.sucesso(mediacoesVisiveisPara(usuario).stream().map(MediacaoResponse::de).toList());
+    @Operation(summary = "Comprador vê as próprias mediações; administrador vê todas (paginado)")
+    public ApiResponse<List<MediacaoResponse>> listar(@RequestParam(defaultValue = "0") int pagina,
+            @RequestParam(defaultValue = "" + Pagina.TAMANHO_PADRAO) int tamanho, UsuarioAutenticado usuario) {
+        var trecho = Pagina.de(pagina, tamanho);
+        if (usuario.possuiPapel(Papel.COMPRADOR)) {
+            return ApiResponse.sucesso(mediacoes.listarDoComprador(usuario.id(), trecho).stream()
+                    .map(MediacaoResponse::paraComprador).toList());
+        }
+        usuario.exigirPapel(Papel.ADMIN);
+        return ApiResponse.sucesso(mediacoes.listarTodas(trecho).stream()
+                .map(MediacaoResponse::paraAdministrador).toList());
     }
 
     @PatchMapping("/{id}")
@@ -66,7 +77,7 @@ public class MediacoesController {
         if (corpo == null || !EstadoMediacao.EM_ANALISE.codigo().equals(corpo.estado())) {
             throw new RequisicaoInvalidaException("Estado inválido.");
         }
-        return responder(mediacoes.iniciarAnalise(id));
+        return ApiResponse.sucesso(MediacaoResponse.paraAdministrador(mediacoes.iniciarAnalise(id)));
     }
 
     @PostMapping("/{id}/decisao")
@@ -75,20 +86,19 @@ public class MediacoesController {
             @RequestBody MediacaoRequests.Decisao corpo, UsuarioAutenticado usuario) {
         usuario.exigirPapel(Papel.ADMIN);
         mediacoes.registrarDecisao(id, DecisaoMediacao.deCodigo(corpo.decisao()));
-        var atual = entregas.entregar(id);
-        var status = atual.aguardaEntregaDaDecisao() ? HttpStatus.ACCEPTED : HttpStatus.OK;
-        return ResponseEntity.status(status).body(responder(atual));
+        return respostaDeEntrega(entregas.entregar(id));
     }
 
-    private List<Mediacao> mediacoesVisiveisPara(UsuarioAutenticado usuario) {
-        if (usuario.possuiPapel(Papel.COMPRADOR)) {
-            return mediacoes.listarDoComprador(usuario.id());
-        }
+    @PostMapping("/{id}/reprocessar-entrega")
+    @Operation(summary = "Administrador reenvia ao commerce uma decisão cuja entrega falhou (mesmo decisaoId)")
+    public ResponseEntity<ApiResponse<MediacaoResponse>> reprocessarEntrega(@PathVariable UUID id,
+            UsuarioAutenticado usuario) {
         usuario.exigirPapel(Papel.ADMIN);
-        return mediacoes.listarTodas();
+        return respostaDeEntrega(entregas.reprocessar(id));
     }
 
-    private static ApiResponse<MediacaoResponse> responder(Mediacao mediacao) {
-        return ApiResponse.sucesso(MediacaoResponse.de(mediacao));
+    private static ResponseEntity<ApiResponse<MediacaoResponse>> respostaDeEntrega(Mediacao atual) {
+        var status = atual.aguardaEntregaDaDecisao() ? HttpStatus.ACCEPTED : HttpStatus.OK;
+        return ResponseEntity.status(status).body(ApiResponse.sucesso(MediacaoResponse.paraAdministrador(atual)));
     }
 }

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import br.com.balaio.community.shared.paginacao.Pagina;
 import br.com.balaio.community.video.domain.Video;
 
 public interface VideosPort {
@@ -11,9 +12,11 @@ public interface VideosPort {
 
     Optional<Video> buscar(UUID id);
 
-    List<Video> listarPublicados();
+    List<Video> listarPublicados(Pagina pagina);
 
-    List<Video> listarDoArtesao(UUID artesaoId);
+    List<Video> listarDoArtesao(UUID artesaoId, Pagina pagina);
 
     void remover(UUID id);
+
+    void registrarVisualizacao(UUID id);
 }
