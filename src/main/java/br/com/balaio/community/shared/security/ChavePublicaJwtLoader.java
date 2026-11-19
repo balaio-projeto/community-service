@@ -36,7 +36,10 @@ final class ChavePublicaJwtLoader {
         if (!recurso.exists() || recurso.contentLength() > TAMANHO_MAXIMO_ARQUIVO) {
             throw new IllegalArgumentException("Arquivo da chave ausente ou grande demais.");
         }
-        String pem = new String(recurso.getInputStream().readAllBytes(), StandardCharsets.US_ASCII).strip();
+        String pem;
+        try (var input = recurso.getInputStream()) {
+            pem = new String(input.readAllBytes(), StandardCharsets.US_ASCII).strip();
+        }
         if (!pem.startsWith(INICIO_PEM) || !pem.endsWith(FIM_PEM)) {
             throw new IllegalArgumentException("Arquivo da chave não está em PEM.");
         }
