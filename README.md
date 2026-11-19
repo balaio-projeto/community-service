@@ -112,3 +112,30 @@ A porta `ArmazenamentoMidiaPort` tem dois adaptadores, escolhidos por `COMMUNITY
 Comprador autenticado cria `POST /api/v1/admin/mediacoes` com `pedido` (UUID), `assunto` e `relato`; o serviço consulta o commerce com o mesmo Bearer para validar a titularidade (404 se o pedido não existe, 403 se não é do comprador, 503 se o commerce não responde). Comprador lista somente as próprias mediações em `GET /api/v1/admin/mediacoes`; administrador lista todas, coloca em análise por `PATCH /api/v1/admin/mediacoes/{id}` com `estado: "emAnalise"` e decide por `POST /api/v1/admin/mediacoes/{id}/decisao` com `decisao: "cancelar_reembolsar" | "negar" | "manter_conversa"`.
 
 A decisão e seu UUID são persistidos antes do comando interno ao commerce. Em falha de rede, a resposta é 202 e a mediação fica `decisao_pendente`; o agendador tenta de novo com o mesmo identificador, com espera exponencial de até 60 s e no máximo 10 tentativas. Repetir a mesma decisão é idempotente; uma decisão diferente da registrada retorna 409. O reembolso é apenas um resultado demonstrativo do pedido, sem movimentação financeira até existir provedor sandbox.
+
+
+## PI-169 — Validacao local do contrato JWT
+
+O decoder de producao valida RS256 e o JSON assinado independentemente do
+Gateway: sub UUID canonico, papel conhecido, iss/aud configurados, iat/exp
+inteiros, jti textual nao vazio e duracao positiva de ate 3600 segundos.
+Expiracao e estrita; iat admite ate 30 segundos no futuro; nbf e respeitado.
+Campos duplicados, algoritmos alternativos e cabecalhos que fornecem chaves
+sao recusados. A chave publica e lida com fechamento do stream. Somente o
+Profile possui a chave privada. Nao ha refresh ou revogacao imediata.
+
+A autorizacao de papel e propriedade existente permanece nos controllers e
+casos de uso. Nao foi adicionado hasRole nem acesso ao banco de outro servico.
+Token ausente/invalido em rota protegida produz 401 NAO_AUTENTICADO; identidade
+valida sem permissao produz 403 SEM_PERMISSAO, salvo ocultacao documentada por
+404. Headers X-User/X-Role nao autenticam. APIs internas preservam seu token
+proprio, sem exposicao pelo Gateway.
+
+JwtContractTest gera RSA 3072 em memoria e exercita o decoder real; JwtHttpTest
+inicia HTTP em porta aleatoria com a cadeia/decoder de producao e uma rota
+probe somente de teste (sem banco). Os testes de negocio existentes continuam
+responsaveis por papel e propriedade. Os testes probe nao sao endpoints da
+aplicacao e nao substituem validacao integrada ou testes de persistencia.
+
+Fontes: PI-169, PI-168, PI-249 e PI-261 no Jira. Organizador permanece reservado
+ao PI-210. Configuracoes de chave publica, issuer e audience nao mudaram.
