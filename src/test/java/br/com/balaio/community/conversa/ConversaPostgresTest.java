@@ -1,6 +1,7 @@
 package br.com.balaio.community.conversa;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -17,6 +18,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -28,6 +30,7 @@ import br.com.balaio.community.conversa.domain.ParteDaConversa;
 import br.com.balaio.community.conversa.domain.PedidoDaConversa;
 import br.com.balaio.community.shared.security.Papel;
 import br.com.balaio.community.shared.security.UsuarioAutenticado;
+import br.com.balaio.community.shared.exception.ConflitoException;
 
 @EnabledIfEnvironmentVariable(named = "COMMUNITY_POSTGRES_TEST", matches = "true")
 @SpringBootTest(properties = "balaio.worker.enabled=false")
@@ -43,8 +46,27 @@ class ConversaPostgresTest {
     }
 
     @Autowired ConversaService conversas;
+    @Autowired JdbcTemplate jdbc;
     @MockitoBean PedidosDaConversaPort pedidos;
     @MockitoBean JwtDecoder decoder;
+
+    @Test
+    void respostaPerdidaEReenvioNaoDuplicamMensagem() {
+        var comprador = new UsuarioAutenticado(UUID.randomUUID(), Papel.COMPRADOR, "c");
+        var outroPedido = UUID.randomUUID();
+        var pedido = UUID.randomUUID();
+        when(pedidos.parteNoPedido(any(), eq(comprador))).thenReturn(Optional.of(ParteDaConversa.COMPRADOR));
+
+        var original = conversas.enviar(pedido, "Mensagem", "chave-retry", comprador);
+        var repetida = conversas.enviar(pedido, "Mensagem", "chave-retry", comprador);
+        assertThat(repetida.id()).isEqualTo(original.id());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM mensagens_pedido WHERE pedido_id = ?", Integer.class, pedido))
+                .isEqualTo(1);
+        assertThatThrownBy(() -> conversas.enviar(pedido, "Alterada", "chave-retry", comprador))
+                .isInstanceOf(ConflitoException.class);
+        assertThatThrownBy(() -> conversas.enviar(outroPedido, "Mensagem", "chave-retry", comprador))
+                .isInstanceOf(ConflitoException.class);
+    }
 
     @Test
     void mensagensEPrimeiraLeituraPersistemEntreSessoes() {

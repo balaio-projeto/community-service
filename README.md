@@ -77,10 +77,10 @@ Comprador, peça e estado vêm do commerce (`GET /pedidos/{id}` com o token do c
 
 ## Conversas por pedido (PI-222)
 
-- `GET` e `POST /api/v1/pedidos/{id}/conversa` com `{ texto }`: só o comprador e o artesão do pedido. Quem não participa recebe 404, sem ver nenhuma mensagem. Ler a conversa marca como lida para quem leu.
+- `GET` e `POST /api/v1/pedidos/{id}/conversa` com `{ texto }`: só o comprador e o artesão do pedido. O POST exige `Idempotency-Key` (até 160 caracteres), única por autor. Repetir a chave com o mesmo pedido e texto devolve a mensagem gravada; reutilizá-la para outro pedido ou texto devolve 409. Quem não participa recebe 404, sem ver nenhuma mensagem. Ler a conversa marca como lida para quem leu.
 - `GET /api/v1/artesao/conversas`: pedidos do artesão do token, com `id`, `pessoa`, `assunto`, `previa`, `quando`, `naoLida` e `retrato`. O parâmetro `?artesao=` da Fake API é ignorado.
 
-Quem participa é confirmado no commerce com o token de quem chama: o comprador via `GET /api/v1/pedidos/{id}` (só responde para o dono) e o artesão via `GET /api/v1/artesao/vendas` (só traz as vendas dele). Se o commerce não responder, o acesso é negado com 503, nunca liberado.
+Quem participa é confirmado pelo contrato interno `GET /internal/v1/pedidos/{id}/participantes` do commerce, com `X-Balaio-Service-Token`. O community compara os IDs retornados ao `sub` do JWT validado localmente; terceiro ou pedido inexistente recebe 404. Falha do commerce ou do token interno devolve 503 sem liberar acesso. `POST /api/v1/pedidos/{id}/conversa/leitura` confirma a leitura sem alterar mensagens. A caixa `GET /api/v1/artesao/conversas` mantém o contrato PI-222.
 
 ## Vídeos e comentários (PI-200)
 

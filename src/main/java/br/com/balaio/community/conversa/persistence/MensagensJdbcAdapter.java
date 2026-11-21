@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import br.com.balaio.community.conversa.application.port.out.MensagensPort;
 import br.com.balaio.community.conversa.domain.Mensagem;
 import br.com.balaio.community.conversa.domain.ParteDaConversa;
+import br.com.balaio.community.shared.exception.ConflitoException;
 
 @Component
 class MensagensJdbcAdapter implements MensagensPort {
@@ -27,13 +28,24 @@ class MensagensJdbcAdapter implements MensagensPort {
     }
 
     @Override
-    public Mensagem salvar(Mensagem mensagem) {
-        jdbc.sql("INSERT INTO mensagens_pedido (" + COLUNAS + ") VALUES (:id, :pedido, :autorId, :autor, :texto, :em)")
+    public Mensagem salvarIdempotente(Mensagem mensagem, String chave) {
+        int inseridas = jdbc.sql("INSERT INTO mensagens_pedido (" + COLUNAS + ", chave_idempotencia) "
+                        + "VALUES (:id, :pedido, :autorId, :autor, :texto, :em, :chave) "
+                        + "ON CONFLICT (autor_id, chave_idempotencia) WHERE chave_idempotencia IS NOT NULL DO NOTHING")
                 .param("id", mensagem.id()).param("pedido", mensagem.pedidoId())
                 .param("autorId", mensagem.autorId()).param("autor", mensagem.autor().codigo())
-                .param("texto", mensagem.texto()).param("em", mensagem.enviadaEm())
+                .param("texto", mensagem.texto()).param("em", mensagem.enviadaEm()).param("chave", chave)
                 .update();
-        return mensagem;
+        if (inseridas == 1) return mensagem;
+        var existente = jdbc.sql("SELECT " + COLUNAS + " FROM mensagens_pedido "
+                        + "WHERE autor_id = :autorId AND chave_idempotencia = :chave")
+                .param("autorId", mensagem.autorId()).param("chave", chave)
+                .query(MensagensJdbcAdapter::mensagem).single();
+        if (!existente.pedidoId().equals(mensagem.pedidoId()) || !existente.texto().equals(mensagem.texto())) {
+            throw new ConflitoException("CHAVE_IDEMPOTENCIA_REUTILIZADA",
+                    "A chave de idempotência já foi usada para outra mensagem.");
+        }
+        return existente;
     }
 
     @Override

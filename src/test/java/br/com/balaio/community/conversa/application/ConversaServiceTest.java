@@ -28,6 +28,7 @@ import br.com.balaio.community.conversa.domain.Mensagem;
 import br.com.balaio.community.conversa.domain.ParteDaConversa;
 import br.com.balaio.community.conversa.domain.PedidoDaConversa;
 import br.com.balaio.community.shared.exception.AcessoNegadoException;
+import br.com.balaio.community.shared.exception.ConflitoException;
 import br.com.balaio.community.shared.exception.RecursoNaoEncontradoException;
 import br.com.balaio.community.shared.exception.ServicoIndisponivelException;
 import br.com.balaio.community.shared.security.Papel;
@@ -61,6 +62,16 @@ class ConversaServiceTest {
 
         assertThat(conversas.lerConversa(pedido.id(), comprador))
                 .extracting(Mensagem::autor).containsExactly(ParteDaConversa.COMPRADOR, ParteDaConversa.ARTESAO);
+    }
+
+    @Test
+    void retryRetornaMensagemOriginalEReutilizacaoDiferenteConflita() {
+        var primeira = conversas.enviar(pedido.id(), "Olá", "tentativa-1", comprador);
+        var repetida = conversas.enviar(pedido.id(), "Olá", "tentativa-1", comprador);
+        assertThat(repetida.id()).isEqualTo(primeira.id());
+        assertThat(conversas.lerConversa(pedido.id(), comprador)).hasSize(1);
+        assertThatThrownBy(() -> conversas.enviar(pedido.id(), "Outro texto", "tentativa-1", comprador))
+                .isInstanceOf(ConflitoException.class);
     }
 
     @Test
@@ -119,11 +130,19 @@ class ConversaServiceTest {
 
     private static final class MensagensEmMemoria implements MensagensPort {
         private final List<Mensagem> mensagens = new ArrayList<>();
+        private final Map<String, Mensagem> chaves = new HashMap<>();
         private final Map<String, OffsetDateTime> leituras = new HashMap<>();
 
         @Override
-        public Mensagem salvar(Mensagem mensagem) {
+        public Mensagem salvarIdempotente(Mensagem mensagem, String chave) {
+            var anterior = chaves.get(mensagem.autorId() + ":" + chave);
+            if (anterior != null) {
+                if (!anterior.pedidoId().equals(mensagem.pedidoId()) || !anterior.texto().equals(mensagem.texto()))
+                    throw new ConflitoException("CHAVE_IDEMPOTENCIA_REUTILIZADA", "Chave reutilizada.");
+                return anterior;
+            }
             mensagens.add(mensagem);
+            chaves.put(mensagem.autorId() + ":" + chave, mensagem);
             return mensagem;
         }
 
