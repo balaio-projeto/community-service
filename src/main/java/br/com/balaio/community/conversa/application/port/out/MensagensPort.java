@@ -9,7 +9,7 @@ import java.util.UUID;
 import br.com.balaio.community.conversa.domain.Mensagem;
 
 public interface MensagensPort {
-    Mensagem salvar(Mensagem mensagem);
+    Mensagem salvarIdempotente(Mensagem mensagem, String chave);
 
     List<Mensagem> listarDoPedido(UUID pedidoId);
 

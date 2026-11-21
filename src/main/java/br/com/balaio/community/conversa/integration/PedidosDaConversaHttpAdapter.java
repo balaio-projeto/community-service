@@ -18,7 +18,6 @@ import br.com.balaio.community.conversa.application.port.out.PedidosDaConversaPo
 import br.com.balaio.community.conversa.domain.ParteDaConversa;
 import br.com.balaio.community.conversa.domain.PedidoDaConversa;
 import br.com.balaio.community.shared.exception.ServicoIndisponivelException;
-import br.com.balaio.community.shared.integration.ConsultasCommerceClient;
 import br.com.balaio.community.shared.integration.HttpClientes;
 import br.com.balaio.community.shared.integration.RespostaIncompativelException;
 import br.com.balaio.community.shared.security.Papel;
@@ -27,24 +26,37 @@ import br.com.balaio.community.shared.security.UsuarioAutenticado;
 @Component
 class PedidosDaConversaHttpAdapter implements PedidosDaConversaPort {
     private final RestClient http;
-    private final ConsultasCommerceClient consultasCommerce;
+    private final String tokenInterno;
 
     PedidosDaConversaHttpAdapter(@Value("${balaio.commerce-url}") String urlCommerce,
-            ConsultasCommerceClient consultasCommerce) {
+            @Value("${balaio.internal-token:}") String tokenInterno) {
         this.http = HttpClientes.criar(urlCommerce);
-        this.consultasCommerce = consultasCommerce;
+        this.tokenInterno = tokenInterno;
     }
 
     @Override
     public Optional<ParteDaConversa> parteNoPedido(UUID pedidoId, UsuarioAutenticado usuario) {
-        if (usuario.possuiPapel(Papel.COMPRADOR)) {
-            return compradorDoPedido(pedidoId, usuario) ? Optional.of(ParteDaConversa.COMPRADOR) : Optional.empty();
+        if (!usuario.possuiPapel(Papel.COMPRADOR) && !usuario.possuiPapel(Papel.ARTESAO))
+            return Optional.empty();
+        try {
+            JsonNode partes = HttpClientes.dados(http.get()
+                    .uri("/internal/v1/pedidos/{id}/participantes", pedidoId)
+                    .header("X-Balaio-Service-Token", tokenInterno)
+                    .retrieve().body(JsonNode.class));
+            UUID compradorId = UUID.fromString(partes.path("compradorId").asString());
+            UUID artesaoId = UUID.fromString(partes.path("artesaoId").asString());
+            if (usuario.possuiPapel(Papel.COMPRADOR)
+                    && usuario.id().equals(compradorId))
+                return Optional.of(ParteDaConversa.COMPRADOR);
+            if (usuario.possuiPapel(Papel.ARTESAO)
+                    && usuario.id().equals(artesaoId))
+                return Optional.of(ParteDaConversa.ARTESAO);
+            return Optional.empty();
+        } catch (HttpClientErrorException.NotFound inexistente) {
+            return Optional.empty();
+        } catch (RestClientException | RespostaIncompativelException | IllegalArgumentException indisponivel) {
+            throw commerceIndisponivel();
         }
-        if (usuario.possuiPapel(Papel.ARTESAO)) {
-            boolean vendeu = vendasDoArtesao(usuario).stream().anyMatch(pedido -> pedido.id().equals(pedidoId));
-            return vendeu ? Optional.of(ParteDaConversa.ARTESAO) : Optional.empty();
-        }
-        return Optional.empty();
     }
 
     @Override
@@ -58,17 +70,6 @@ class PedidosDaConversaHttpAdapter implements PedidosDaConversaPort {
                             venda.path("compradorNome").asString(), venda.path("data").asString()))
                     .toList();
         } catch (RestClientException | RespostaIncompativelException | IllegalArgumentException indisponivel) {
-            throw commerceIndisponivel();
-        }
-    }
-
-    private boolean compradorDoPedido(UUID pedidoId, UsuarioAutenticado comprador) {
-        try {
-            consultasCommerce.consultarPedido(pedidoId, comprador.token());
-            return true;
-        } catch (HttpClientErrorException.NotFound | HttpClientErrorException.Forbidden naoEhDele) {
-            return false;
-        } catch (RestClientException | RespostaIncompativelException indisponivel) {
             throw commerceIndisponivel();
         }
     }

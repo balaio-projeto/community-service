@@ -16,6 +16,7 @@ import br.com.balaio.community.conversa.domain.ParteDaConversa;
 import br.com.balaio.community.conversa.domain.PedidoDaConversa;
 import br.com.balaio.community.conversa.domain.ResumoConversa;
 import br.com.balaio.community.shared.exception.RecursoNaoEncontradoException;
+import br.com.balaio.community.shared.exception.RequisicaoInvalidaException;
 import br.com.balaio.community.shared.security.Papel;
 import br.com.balaio.community.shared.security.UsuarioAutenticado;
 
@@ -48,10 +49,17 @@ public class ConversaService {
     }
 
     public Mensagem enviar(UUID pedidoId, String texto, UsuarioAutenticado autor) {
+        return enviar(pedidoId, texto, UUID.randomUUID().toString(), autor);
+    }
+
+    public Mensagem enviar(UUID pedidoId, String texto, String chave, UsuarioAutenticado autor) {
         var parte = exigirParte(pedidoId, autor);
+        if (chave == null || chave.isBlank() || chave.length() > 160) {
+            throw new RequisicaoInvalidaException("Informe uma chave de idempotência válida.");
+        }
         var nova = Mensagem.enviar(pedidoId, autor.id(), parte, texto, agora());
         return transacao.execute(status -> {
-            var mensagem = mensagens.salvar(nova);
+            var mensagem = mensagens.salvarIdempotente(nova, chave);
             mensagens.registrarLeitura(pedidoId, autor.id(), mensagem.enviadaEm());
             return mensagem;
         });

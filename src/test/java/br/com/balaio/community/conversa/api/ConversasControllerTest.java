@@ -81,6 +81,22 @@ class ConversasControllerTest {
     }
 
     @Test
+    void envioExigeChaveERepassaIdentidadeValidada() throws Exception {
+        UUID pedido = UUID.randomUUID();
+        var mensagem = Mensagem.enviar(pedido, UUID.randomUUID(), ParteDaConversa.COMPRADOR, "Oi", MEIO_DIA_UTC);
+        when(conversas.enviar(eq(pedido), eq("Oi"), eq("envio-123"), any())).thenReturn(mensagem);
+        mvc.perform(post("/api/v1/pedidos/" + pedido + "/conversa").with(usuario("comprador"))
+                .contentType("application/json").content("{\"texto\":\"Oi\"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/pedidos/" + pedido + "/conversa").with(usuario("comprador"))
+                .header("Idempotency-Key", "envio-123")
+                .contentType("application/json").content("{\"texto\":\"Oi\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.dados.id").value(mensagem.id().toString()));
+        verify(conversas).enviar(eq(pedido), eq("Oi"), eq("envio-123"), any());
+    }
+
+    @Test
     void painelDoArtesaoTrazOsCamposDaTela() throws Exception {
         var pedido = new PedidoDaConversa(UUID.randomUUID(), "Ana", "14/11/2026");
         when(conversas.conversasDoArtesao(any()))
