@@ -24,13 +24,18 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.task.SyncTaskExecutor;
+import org.springframework.core.task.support.TaskExecutorAdapter;
 import org.springframework.http.MediaType;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.servlet.config.annotation.AsyncSupportConfigurer;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import br.com.balaio.community.shared.config.WebConfig;
 import br.com.balaio.community.shared.paginacao.Pagina;
@@ -44,8 +49,17 @@ import br.com.balaio.community.video.domain.TipoMidia;
 import br.com.balaio.community.video.domain.Video;
 
 @WebMvcTest(VideosController.class)
-@Import({ SecurityConfig.class, WebConfig.class, UsuarioAutenticadoArgumentResolver.class })
+@Import({ SecurityConfig.class, WebConfig.class, UsuarioAutenticadoArgumentResolver.class,
+        VideosControllerTest.AsyncSincronoConfig.class })
 class VideosControllerTest {
+    @TestConfiguration(proxyBeanMethods = false)
+    static class AsyncSincronoConfig implements WebMvcConfigurer {
+        @Override
+        public void configureAsyncSupport(AsyncSupportConfigurer configurer) {
+            configurer.setTaskExecutor(new TaskExecutorAdapter(new SyncTaskExecutor()));
+        }
+    }
+
     private static final OffsetDateTime AGORA = OffsetDateTime.of(2026, 11, 14, 12, 0, 0, 0, ZoneOffset.UTC);
 
     @Autowired MockMvc mvc;
@@ -88,7 +102,8 @@ class VideosControllerTest {
         UUID id = UUID.randomUUID();
         when(videos.abrirMidia(eq(id), eq(TipoMidia.VIDEO), any())).thenReturn(midia("0123456789"));
 
-        var envio = mvc.perform(get("/api/v1/videos/" + id + "/arquivo")).andReturn();
+        var envio = mvc.perform(get("/api/v1/videos/" + id + "/arquivo"))
+                .andExpect(request().asyncStarted()).andReturn();
         mvc.perform(asyncDispatch(envio)).andExpect(status().isOk()).andExpect(content().string("0123456789"));
     }
 
