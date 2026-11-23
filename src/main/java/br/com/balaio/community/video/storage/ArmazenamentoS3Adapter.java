@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -33,6 +34,7 @@ class ArmazenamentoS3Adapter implements ArmazenamentoMidiaPort {
     private final S3Client s3;
     private final String bucket;
 
+    @Autowired
     ArmazenamentoS3Adapter(@Value("${balaio.midia.s3.endpoint}") String endpoint,
             @Value("${balaio.midia.s3.regiao:auto}") String regiao,
             @Value("${balaio.midia.s3.bucket}") String bucket,
