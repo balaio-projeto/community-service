@@ -13,6 +13,7 @@ public final class Mediacao {
     private final UUID id;
     private final UUID pedidoId;
     private final UUID compradorId;
+    private final UUID artesaoId;
     private final String assunto;
     private final String relato;
     private final OffsetDateTime criadaEm;
@@ -27,6 +28,7 @@ public final class Mediacao {
         this.id = dados.id();
         this.pedidoId = dados.pedidoId();
         this.compradorId = dados.compradorId();
+        this.artesaoId = dados.artesaoId();
         this.assunto = dados.assunto();
         this.relato = dados.relato();
         this.criadaEm = dados.criadaEm();
@@ -44,8 +46,13 @@ public final class Mediacao {
                 || assunto.strip().length() > TAMANHO_MAXIMO_ASSUNTO) {
             throw new RequisicaoInvalidaException("Informe pedido, assunto e relato.");
         }
-        return new Mediacao(new Dados(UUID.randomUUID(), pedidoId, compradorId, assunto.strip(), relato.strip(),
-                EstadoMediacao.ABERTA, null, null, 0, null, agora, agora));
+        return new Mediacao(new Dados(UUID.randomUUID(), pedidoId, compradorId, null, assunto.strip(),
+                relato.strip(), EstadoMediacao.ABERTA, null, null, 0, null, agora, agora));
+    }
+
+    public Mediacao doArtesao(UUID artesaoDoPedido) {
+        return new Mediacao(new Dados(id, pedidoId, compradorId, artesaoDoPedido, assunto, relato, estado, decisao,
+                decisaoId, tentativasEntrega, ultimoErroEntrega, criadaEm, atualizadaEm));
     }
 
     public static Mediacao reconstituir(Dados dados) {
@@ -118,6 +125,7 @@ public final class Mediacao {
     public UUID id() { return id; }
     public UUID pedidoId() { return pedidoId; }
     public UUID compradorId() { return compradorId; }
+    public UUID artesaoId() { return artesaoId; }
     public String assunto() { return assunto; }
     public String relato() { return relato; }
     public OffsetDateTime criadaEm() { return criadaEm; }
@@ -132,7 +140,7 @@ public final class Mediacao {
         return texto == null || texto.isBlank();
     }
 
-    public record Dados(UUID id, UUID pedidoId, UUID compradorId, String assunto, String relato,
+    public record Dados(UUID id, UUID pedidoId, UUID compradorId, UUID artesaoId, String assunto, String relato,
             EstadoMediacao estado, DecisaoMediacao decisao, UUID decisaoId, int tentativasEntrega,
             String ultimoErroEntrega, OffsetDateTime criadaEm, OffsetDateTime atualizadaEm) {
     }

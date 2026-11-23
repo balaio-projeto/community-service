@@ -20,6 +20,7 @@ import com.sun.net.httpserver.HttpServer;
 
 import br.com.balaio.community.mediacao.application.port.out.PedidosCommercePort.FalhaNaEntregaException;
 import br.com.balaio.community.mediacao.domain.DecisaoMediacao;
+import br.com.balaio.community.shared.exception.ServicoIndisponivelException;
 import br.com.balaio.community.shared.integration.ConsultasCommerceClient;
 
 class PedidosCommerceHttpAdapterTest {
@@ -99,6 +100,36 @@ class PedidosCommerceHttpAdapterTest {
         var adapter = adapterPara("http://127.0.0.1:" + portaFechada);
 
         assertThat(falhaAoEntregar(adapter).admiteNovaTentativa()).isTrue();
+    }
+
+    @Test
+    void confirmacaoDoCompradorDevolveOArtesaoDoPedido() throws IOException {
+        UUID pedido = UUID.randomUUID();
+        UUID artesao = UUID.randomUUID();
+        var adapter = adapterRespondendo(200,
+                "{\"dados\":{\"id\":\"" + pedido + "\",\"artesaoId\":\"" + artesao + "\"},\"erro\":null}", 0);
+
+        assertThat(adapter.confirmarCompradorDoPedido(pedido, "token-comprador")).isEqualTo(artesao);
+        assertThat(requisicaoRecebida.get()).startsWith("GET /api/v1/pedidos/" + pedido + " ");
+    }
+
+    @Test
+    void vendasDoArtesaoViramIdsDePedido() throws IOException {
+        UUID primeiro = UUID.randomUUID();
+        UUID segundo = UUID.randomUUID();
+        var adapter = adapterRespondendo(200,
+                "{\"dados\":[{\"id\":\"" + primeiro + "\"},{\"id\":\"" + segundo + "\"}],\"erro\":null}", 0);
+
+        assertThat(adapter.pedidosVendidosPeloArtesao("token-artesao")).containsExactly(primeiro, segundo);
+        assertThat(requisicaoRecebida.get()).startsWith("GET /api/v1/artesao/vendas ");
+    }
+
+    @Test
+    void vendaSemIdentificadorValidoEhCommerceIndisponivel() throws IOException {
+        var adapter = adapterRespondendo(200, "{\"dados\":[{\"id\":\"nao-e-uuid\"}],\"erro\":null}", 0);
+
+        assertThat(catchThrowableOfType(ServicoIndisponivelException.class,
+                () -> adapter.pedidosVendidosPeloArtesao("token-artesao")).codigo()).isEqualTo("COMMERCE_INDISPONIVEL");
     }
 
     private static FalhaNaEntregaException falhaAoEntregar(PedidosCommerceHttpAdapter adapter) {

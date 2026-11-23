@@ -1,5 +1,6 @@
 package br.com.balaio.community.mediacao.application;
 
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -52,6 +53,23 @@ class MediacoesEmMemoria implements MediacoesPort {
     }
 
     @Override
+    public List<Mediacao> listarDoArtesao(UUID artesaoId, Pagina pagina) {
+        return paginar(todas().stream().filter(mediacao -> artesaoId.equals(mediacao.artesaoId())).toList(), pagina);
+    }
+
+    @Override
+    public boolean existemSemArtesao() {
+        return armazenadas.values().stream().anyMatch(dados -> dados.artesaoId() == null);
+    }
+
+    @Override
+    public void vincularArtesao(UUID artesaoId, Collection<UUID> pedidosDoArtesao) {
+        todas().stream().filter(mediacao -> mediacao.artesaoId() == null)
+                .filter(mediacao -> pedidosDoArtesao.contains(mediacao.pedidoId()))
+                .forEach(mediacao -> registrar(mediacao.doArtesao(artesaoId)));
+    }
+
+    @Override
     public List<UUID> idsAguardandoEntrega(int limite) {
         return todas().stream().filter(Mediacao::aguardaEntregaDaDecisao).limit(limite).map(Mediacao::id).toList();
     }
@@ -70,8 +88,8 @@ class MediacoesEmMemoria implements MediacoesPort {
     }
 
     private static Mediacao.Dados copiar(Mediacao mediacao) {
-        return new Mediacao.Dados(mediacao.id(), mediacao.pedidoId(), mediacao.compradorId(), mediacao.assunto(),
-                mediacao.relato(), mediacao.estado(), mediacao.decisao(), mediacao.decisaoId(),
+        return new Mediacao.Dados(mediacao.id(), mediacao.pedidoId(), mediacao.compradorId(), mediacao.artesaoId(),
+                mediacao.assunto(), mediacao.relato(), mediacao.estado(), mediacao.decisao(), mediacao.decisaoId(),
                 mediacao.tentativasEntrega(), mediacao.ultimoErroEntrega(), mediacao.criadaEm(),
                 mediacao.atualizadaEm());
     }

@@ -17,6 +17,10 @@ public record MediacaoResponse(UUID id, UUID pedido, UUID compradorId, String as
         return de(mediacao, null);
     }
 
+    static MediacaoResponse paraArtesao(Mediacao mediacao) {
+        return de(mediacao, null);
+    }
+
     static MediacaoResponse paraAdministrador(Mediacao mediacao) {
         return de(mediacao, mediacao.ultimoErroEntrega());
     }

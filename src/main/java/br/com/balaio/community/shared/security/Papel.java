@@ -6,6 +6,7 @@ import java.util.Optional;
 public enum Papel {
     COMPRADOR("comprador"),
     ARTESAO("artesao"),
+    ORGANIZADOR("organizador"),
     ADMIN("admin");
 
     private final String codigo;

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -30,7 +31,11 @@ import br.com.balaio.community.mediacao.application.port.out.PedidosCommercePort
 import br.com.balaio.community.mediacao.application.port.out.PedidosCommercePort.FalhaNaEntregaException;
 import br.com.balaio.community.mediacao.domain.DecisaoMediacao;
 import br.com.balaio.community.mediacao.domain.EstadoMediacao;
+import br.com.balaio.community.mediacao.domain.Mediacao;
 import br.com.balaio.community.shared.exception.ConflitoException;
+import br.com.balaio.community.shared.paginacao.Pagina;
+import br.com.balaio.community.shared.security.Papel;
+import br.com.balaio.community.shared.security.UsuarioAutenticado;
 
 @EnabledIfEnvironmentVariable(named = "COMMUNITY_POSTGRES_TEST", matches = "true")
 @SpringBootTest(properties = "balaio.worker.enabled=false")
@@ -91,6 +96,49 @@ class MediacaoPostgresTest {
                 .isEqualTo("falha_entrega");
 
         assertThat(entregas.reprocessar(mediacao.id()).estado()).isEqualTo(EstadoMediacao.DECIDIDA);
+    }
+
+    @Test
+    void compradorEArtesaoListamSomenteAsMediacoesDosPropriosPedidos() {
+        UUID comprador = UUID.randomUUID();
+        UUID artesao = UUID.randomUUID();
+        UUID outroArtesao = UUID.randomUUID();
+        UUID pedidoDoArtesao = UUID.randomUUID();
+        UUID pedidoDeOutroArtesao = UUID.randomUUID();
+        when(commerce.confirmarCompradorDoPedido(pedidoDoArtesao, "token")).thenReturn(artesao);
+        when(commerce.confirmarCompradorDoPedido(pedidoDeOutroArtesao, "token")).thenReturn(outroArtesao);
+        mediacoes.abrir(new AberturaMediacao(pedidoDoArtesao, comprador, "Ajuda", "Relato.", "token"));
+        mediacoes.abrir(new AberturaMediacao(pedidoDeOutroArtesao, UUID.randomUUID(), "Ajuda", "Relato.", "token"));
+
+        assertThat(mediacoes.listarDoComprador(comprador, Pagina.primeira()))
+                .extracting(Mediacao::pedidoId).containsExactly(pedidoDoArtesao);
+        assertThat(mediacoes.listarDoArtesao(artesaoAutenticado(artesao), Pagina.primeira()))
+                .extracting(Mediacao::pedidoId).containsExactly(pedidoDoArtesao);
+        assertThat(mediacoes.listarDoArtesao(artesaoAutenticado(outroArtesao), Pagina.primeira()))
+                .extracting(Mediacao::pedidoId).containsExactly(pedidoDeOutroArtesao);
+        assertThat(jdbc.queryForObject("SELECT artesao_id FROM mediacoes WHERE pedido_id = ?", UUID.class,
+                pedidoDoArtesao)).isEqualTo(artesao);
+    }
+
+    @Test
+    void mediacaoAnteriorAoVinculoDoArtesaoEhAssociadaPelasVendasDele() {
+        UUID artesao = UUID.randomUUID();
+        UUID pedidoAntigo = UUID.randomUUID();
+        var antiga = mediacoes.abrir(new AberturaMediacao(pedidoAntigo, UUID.randomUUID(), "Ajuda", "Relato.",
+                "token"));
+        jdbc.update("UPDATE mediacoes SET artesao_id = NULL WHERE id = ?", antiga.id());
+        when(commerce.pedidosVendidosPeloArtesao("token-artesao")).thenReturn(List.of(pedidoAntigo));
+
+        assertThat(mediacoes.listarDoArtesao(artesaoAutenticado(artesao), Pagina.primeira()))
+                .extracting(Mediacao::id).containsExactly(antiga.id());
+        assertThat(jdbc.queryForObject("SELECT artesao_id FROM mediacoes WHERE id = ?", UUID.class, antiga.id()))
+                .isEqualTo(artesao);
+        assertThat(mediacoes.listarDoArtesao(artesaoAutenticado(UUID.randomUUID()), Pagina.primeira()))
+                .extracting(Mediacao::id).doesNotContain(antiga.id());
+    }
+
+    private static UsuarioAutenticado artesaoAutenticado(UUID artesao) {
+        return new UsuarioAutenticado(artesao, Papel.ARTESAO, "token-artesao");
     }
 
     @Test

@@ -1,13 +1,16 @@
 package br.com.balaio.community.mediacao.integration;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.StreamSupport;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.converter.HttpMessageConversionException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
@@ -64,16 +67,34 @@ class PedidosCommerceHttpAdapter implements PedidosCommercePort {
     }
 
     @Override
-    public void confirmarCompradorDoPedido(UUID pedidoId, String tokenComprador) {
+    public UUID confirmarCompradorDoPedido(UUID pedidoId, String tokenComprador) {
         try {
-            consultasCommerce.consultarPedido(pedidoId, tokenComprador);
+            String artesao = consultasCommerce.consultarPedido(pedidoId, tokenComprador).path("artesaoId").asString();
+            return artesao.isBlank() ? null : UUID.fromString(artesao);
         } catch (HttpClientErrorException.NotFound naoEncontrado) {
             throw new RecursoNaoEncontradoException("PEDIDO_NAO_ENCONTRADO", "Pedido não encontrado.");
         } catch (HttpClientErrorException.Forbidden semPermissao) {
             throw new AcessoNegadoException("Este pedido não pertence a você.");
-        } catch (RestClientException | RespostaIncompativelException indisponivel) {
-            throw new ServicoIndisponivelException("COMMERCE_INDISPONIVEL", "Não foi possível consultar o pedido.");
+        } catch (RestClientException | RespostaIncompativelException | IllegalArgumentException indisponivel) {
+            throw commerceIndisponivel();
         }
+    }
+
+    @Override
+    public List<UUID> pedidosVendidosPeloArtesao(String tokenArtesao) {
+        try {
+            JsonNode vendas = HttpClientes.dados(http.get().uri("/api/v1/artesao/vendas")
+                    .header(HttpHeaders.AUTHORIZATION, HttpClientes.bearer(tokenArtesao))
+                    .retrieve().body(JsonNode.class));
+            return StreamSupport.stream(vendas.spliterator(), false)
+                    .map(venda -> UUID.fromString(venda.path("id").asString())).toList();
+        } catch (RestClientException | RespostaIncompativelException | IllegalArgumentException indisponivel) {
+            throw commerceIndisponivel();
+        }
+    }
+
+    private static ServicoIndisponivelException commerceIndisponivel() {
+        return new ServicoIndisponivelException("COMMERCE_INDISPONIVEL", "Não foi possível consultar o pedido.");
     }
 
     @Override

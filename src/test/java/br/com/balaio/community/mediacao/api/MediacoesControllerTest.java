@@ -2,6 +2,7 @@ package br.com.balaio.community.mediacao.api;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -34,7 +35,9 @@ import br.com.balaio.community.mediacao.domain.DecisaoMediacao;
 import br.com.balaio.community.mediacao.domain.Mediacao;
 import br.com.balaio.community.shared.config.WebConfig;
 import br.com.balaio.community.shared.paginacao.Pagina;
+import br.com.balaio.community.shared.security.Papel;
 import br.com.balaio.community.shared.security.SecurityConfig;
+import br.com.balaio.community.shared.security.UsuarioAutenticado;
 import br.com.balaio.community.shared.security.UsuarioAutenticadoArgumentResolver;
 
 @WebMvcTest(MediacoesController.class)
@@ -144,8 +147,39 @@ class MediacoesControllerTest {
     }
 
     @Test
-    void artesaoNaoListaMediacoes() throws Exception {
-        mvc.perform(get(URL).with(usuario("artesao"))).andExpect(status().isForbidden());
+    void artesaoListaAsDosPedidosDeleSemDetalheTecnicoDaFalha() throws Exception {
+        UUID artesao = UUID.randomUUID();
+        var falhou = mediacaoComEntregaRecusada(UUID.randomUUID());
+        when(mediacoes.listarDoArtesao(any(), eq(Pagina.primeira()))).thenReturn(List.of(falhou));
+
+        mvc.perform(get(URL).with(usuario("artesao", artesao)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dados.length()").value(1))
+                .andExpect(jsonPath("$.dados[0].pedido").value(falhou.pedidoId().toString()))
+                .andExpect(jsonPath("$.dados[0].decisao").value("negar"))
+                .andExpect(jsonPath("$.dados[0].ultimoErro").isEmpty());
+        verify(mediacoes).listarDoArtesao(eq(new UsuarioAutenticado(artesao, Papel.ARTESAO, "token")),
+                eq(Pagina.primeira()));
+        verify(mediacoes, never()).listarTodas(any());
+    }
+
+    @Test
+    void organizadorNaoListaMediacoes() throws Exception {
+        mvc.perform(get(URL).with(usuario("organizador")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.erro.codigo").value("SEM_PERMISSAO"));
+        verifyNoInteractions(mediacoes);
+    }
+
+    @Test
+    void artesaoNaoAnalisaNemDecide() throws Exception {
+        mvc.perform(patch(URL + "/" + UUID.randomUUID()).with(usuario("artesao"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"estado\":\"emAnalise\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post(URL + "/" + UUID.randomUUID() + "/decisao").with(usuario("artesao"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"decisao\":\"negar\"}"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(mediacoes, entregas);
     }
 
     @Test

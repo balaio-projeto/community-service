@@ -1,5 +1,6 @@
 package br.com.balaio.community.mediacao.application.port.out;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,6 +22,12 @@ public interface MediacoesPort {
     List<Mediacao> listarTodas(Pagina pagina);
 
     List<Mediacao> listarDoComprador(UUID compradorId, Pagina pagina);
+
+    List<Mediacao> listarDoArtesao(UUID artesaoId, Pagina pagina);
+
+    boolean existemSemArtesao();
+
+    void vincularArtesao(UUID artesaoId, Collection<UUID> pedidosDoArtesao);
 
     List<UUID> idsAguardandoEntrega(int limite);
 }

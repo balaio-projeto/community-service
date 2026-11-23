@@ -15,6 +15,8 @@ import br.com.balaio.community.mediacao.domain.Mediacao;
 import br.com.balaio.community.shared.exception.ConflitoException;
 import br.com.balaio.community.shared.exception.RecursoNaoEncontradoException;
 import br.com.balaio.community.shared.paginacao.Pagina;
+import br.com.balaio.community.shared.security.Papel;
+import br.com.balaio.community.shared.security.UsuarioAutenticado;
 
 @Service
 public class MediacaoService {
@@ -34,8 +36,8 @@ public class MediacaoService {
         if (mediacoes.existeParaPedido(abertura.pedidoId())) {
             throw mediacaoExistente();
         }
-        pedidos.confirmarCompradorDoPedido(abertura.pedidoId(), abertura.tokenComprador());
-        return mediacoes.registrar(mediacao);
+        var artesao = pedidos.confirmarCompradorDoPedido(abertura.pedidoId(), abertura.tokenComprador());
+        return mediacoes.registrar(mediacao.doArtesao(artesao));
     }
 
     @Transactional(readOnly = true)
@@ -46,6 +48,14 @@ public class MediacaoService {
     @Transactional(readOnly = true)
     public List<Mediacao> listarDoComprador(UUID compradorId, Pagina pagina) {
         return mediacoes.listarDoComprador(compradorId, pagina);
+    }
+
+    public List<Mediacao> listarDoArtesao(UsuarioAutenticado artesao, Pagina pagina) {
+        artesao.exigirPapel(Papel.ARTESAO);
+        if (mediacoes.existemSemArtesao()) {
+            mediacoes.vincularArtesao(artesao.id(), pedidos.pedidosVendidosPeloArtesao(artesao.token()));
+        }
+        return mediacoes.listarDoArtesao(artesao.id(), pagina);
     }
 
     @Transactional(readOnly = true)

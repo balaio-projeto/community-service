@@ -16,6 +16,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +34,8 @@ import br.com.balaio.community.shared.exception.AcessoNegadoException;
 import br.com.balaio.community.shared.exception.ConflitoException;
 import br.com.balaio.community.shared.exception.RecursoNaoEncontradoException;
 import br.com.balaio.community.shared.paginacao.Pagina;
+import br.com.balaio.community.shared.security.Papel;
+import br.com.balaio.community.shared.security.UsuarioAutenticado;
 
 class MediacaoServiceTest {
     private static final Clock RELOGIO = Clock.fixed(Instant.parse("2026-11-14T12:00:00Z"), ZoneOffset.UTC);
@@ -92,6 +95,56 @@ class MediacaoServiceTest {
         assertThat(mediacoes.listarDoComprador(comprador, Pagina.primeira())).hasSize(1);
         assertThat(mediacoes.listarTodas(Pagina.primeira())).hasSize(2);
         assertThat(mediacoes.listarTodas(Pagina.de(1, 1))).hasSize(1);
+    }
+
+    @Test
+    void aberturaGuardaOArtesaoInformadoPeloCommerce() {
+        UUID pedido = UUID.randomUUID();
+        UUID artesao = UUID.randomUUID();
+        when(commerce.confirmarCompradorDoPedido(pedido, TOKEN)).thenReturn(artesao);
+
+        var mediacao = mediacoes.abrir(abertura(pedido, UUID.randomUUID()));
+
+        assertThat(mediacao.artesaoId()).isEqualTo(artesao);
+    }
+
+    @Test
+    void artesaoListaApenasAsDosPedidosDeleSemConsultarCommerceQuandoTodasTemArtesao() {
+        UUID artesao = UUID.randomUUID();
+        UUID pedidoDoArtesao = UUID.randomUUID();
+        UUID pedidoDeOutro = UUID.randomUUID();
+        when(commerce.confirmarCompradorDoPedido(pedidoDoArtesao, TOKEN)).thenReturn(artesao);
+        when(commerce.confirmarCompradorDoPedido(pedidoDeOutro, TOKEN)).thenReturn(UUID.randomUUID());
+        mediacoes.abrir(abertura(pedidoDoArtesao, UUID.randomUUID()));
+        mediacoes.abrir(abertura(pedidoDeOutro, UUID.randomUUID()));
+
+        var lista = mediacoes.listarDoArtesao(artesaoAutenticado(artesao), Pagina.primeira());
+
+        assertThat(lista).extracting(Mediacao::pedidoId).containsExactly(pedidoDoArtesao);
+        verify(commerce, never()).pedidosVendidosPeloArtesao(any());
+    }
+
+    @Test
+    void mediacaoAntigaSemArtesaoEhVinculadaPelasVendasDoArtesao() {
+        UUID artesao = UUID.randomUUID();
+        UUID pedidoAntigo = UUID.randomUUID();
+        UUID pedidoAntigoDeOutro = UUID.randomUUID();
+        mediacoes.abrir(abertura(pedidoAntigo, UUID.randomUUID()));
+        mediacoes.abrir(abertura(pedidoAntigoDeOutro, UUID.randomUUID()));
+        when(commerce.pedidosVendidosPeloArtesao("token-artesao")).thenReturn(List.of(pedidoAntigo));
+
+        var lista = mediacoes.listarDoArtesao(artesaoAutenticado(artesao), Pagina.primeira());
+
+        assertThat(lista).extracting(Mediacao::pedidoId).containsExactly(pedidoAntigo);
+        assertThat(repositorio.buscar(lista.getFirst().id()).orElseThrow().artesaoId()).isEqualTo(artesao);
+    }
+
+    @Test
+    void somenteArtesaoUsaAListagemDoArtesao() {
+        var comprador = new UsuarioAutenticado(UUID.randomUUID(), Papel.COMPRADOR, TOKEN);
+
+        assertThatThrownBy(() -> mediacoes.listarDoArtesao(comprador, Pagina.primeira()))
+                .isInstanceOf(AcessoNegadoException.class);
     }
 
     @Test
@@ -247,6 +300,10 @@ class MediacaoServiceTest {
         mediacoes.iniciarAnalise(mediacao.id());
         mediacoes.registrarDecisao(mediacao.id(), DecisaoMediacao.CANCELAR_REEMBOLSAR);
         return mediacao;
+    }
+
+    private static UsuarioAutenticado artesaoAutenticado(UUID artesao) {
+        return new UsuarioAutenticado(artesao, Papel.ARTESAO, "token-artesao");
     }
 
     private static AberturaMediacao abertura(UUID pedido, UUID comprador) {

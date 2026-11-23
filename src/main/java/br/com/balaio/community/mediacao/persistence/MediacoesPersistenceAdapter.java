@@ -1,5 +1,6 @@
 package br.com.balaio.community.mediacao.persistence;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -65,6 +66,24 @@ class MediacoesPersistenceAdapter implements MediacoesPort {
     public List<Mediacao> listarDoComprador(UUID compradorId, Pagina pagina) {
         return repositorio.findByCompradorIdOrderByCriadaEmDesc(compradorId, paginacao(pagina)).stream()
                 .map(MediacaoJpaEntity::paraDominio).toList();
+    }
+
+    @Override
+    public List<Mediacao> listarDoArtesao(UUID artesaoId, Pagina pagina) {
+        return repositorio.findByArtesaoIdOrderByCriadaEmDesc(artesaoId, paginacao(pagina)).stream()
+                .map(MediacaoJpaEntity::paraDominio).toList();
+    }
+
+    @Override
+    public boolean existemSemArtesao() {
+        return repositorio.existsByArtesaoIdIsNull();
+    }
+
+    @Override
+    public void vincularArtesao(UUID artesaoId, Collection<UUID> pedidosDoArtesao) {
+        if (!pedidosDoArtesao.isEmpty()) {
+            repositorio.vincularArtesao(artesaoId, pedidosDoArtesao);
+        }
     }
 
     private static PageRequest paginacao(Pagina pagina) {

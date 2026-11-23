@@ -24,6 +24,9 @@ class MediacaoJpaEntity {
     @Column(name = "comprador_id", nullable = false)
     private UUID compradorId;
 
+    @Column(name = "artesao_id")
+    private UUID artesaoId;
+
     @Column(nullable = false, length = Mediacao.TAMANHO_MAXIMO_ASSUNTO)
     private String assunto;
 
@@ -59,6 +62,7 @@ class MediacaoJpaEntity {
         entidade.id = mediacao.id();
         entidade.pedidoId = mediacao.pedidoId();
         entidade.compradorId = mediacao.compradorId();
+        entidade.artesaoId = mediacao.artesaoId();
         entidade.assunto = mediacao.assunto();
         entidade.relato = mediacao.relato();
         entidade.criadaEm = mediacao.criadaEm();
@@ -76,7 +80,7 @@ class MediacaoJpaEntity {
     }
 
     Mediacao paraDominio() {
-        return Mediacao.reconstituir(new Mediacao.Dados(id, pedidoId, compradorId, assunto, relato,
+        return Mediacao.reconstituir(new Mediacao.Dados(id, pedidoId, compradorId, artesaoId, assunto, relato,
                 EstadoMediacao.deCodigo(estado), decisao == null ? null : DecisaoMediacao.deCodigo(decisao),
                 decisaoId, tentativas, ultimoErro, criadaEm, atualizadaEm));
     }

@@ -56,13 +56,18 @@ public class MediacoesController {
     }
 
     @GetMapping
-    @Operation(summary = "Comprador vê as próprias mediações; administrador vê todas (paginado)")
+    @Operation(summary = "Comprador vê as próprias mediações; artesão vê, sem poder decidir, as dos pedidos dele; "
+            + "administrador vê todas (paginado)")
     public ApiResponse<List<MediacaoResponse>> listar(@RequestParam(defaultValue = "0") int pagina,
             @RequestParam(defaultValue = "" + Pagina.TAMANHO_PADRAO) int tamanho, UsuarioAutenticado usuario) {
         var trecho = Pagina.de(pagina, tamanho);
         if (usuario.possuiPapel(Papel.COMPRADOR)) {
             return ApiResponse.sucesso(mediacoes.listarDoComprador(usuario.id(), trecho).stream()
                     .map(MediacaoResponse::paraComprador).toList());
+        }
+        if (usuario.possuiPapel(Papel.ARTESAO)) {
+            return ApiResponse.sucesso(mediacoes.listarDoArtesao(usuario, trecho).stream()
+                    .map(MediacaoResponse::paraArtesao).toList());
         }
         usuario.exigirPapel(Papel.ADMIN);
         return ApiResponse.sucesso(mediacoes.listarTodas(trecho).stream()
