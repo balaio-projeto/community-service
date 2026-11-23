@@ -24,6 +24,7 @@ import tools.jackson.databind.JsonNode;
 import br.com.balaio.community.mediacao.application.port.out.PedidosCommercePort;
 import br.com.balaio.community.mediacao.domain.DecisaoMediacao;
 import br.com.balaio.community.shared.exception.AcessoNegadoException;
+import br.com.balaio.community.shared.exception.ConflitoException;
 import br.com.balaio.community.shared.exception.RecursoNaoEncontradoException;
 import br.com.balaio.community.shared.exception.ServicoIndisponivelException;
 import br.com.balaio.community.shared.integration.ConsultasCommerceClient;
@@ -35,6 +36,7 @@ class PedidosCommerceHttpAdapter implements PedidosCommercePort {
     private static final Logger LOG = LoggerFactory.getLogger(PedidosCommerceHttpAdapter.class);
     private static final int TAMANHO_MINIMO_TOKEN_INTERNO = 32;
     private static final String CABECALHO_TOKEN_INTERNO = "X-Balaio-Service-Token";
+    private static final Set<String> ESTADOS_QUE_ACEITAM_MEDIACAO = Set.of("confirmado", "producao", "enviado", "entregue");
     private static final Set<Integer> STATUS_TRANSITORIOS = Set.of(408, 425, 429);
 
     private final RestClient http;
@@ -68,14 +70,24 @@ class PedidosCommerceHttpAdapter implements PedidosCommercePort {
 
     @Override
     public UUID confirmarCompradorDoPedido(UUID pedidoId, String tokenComprador) {
+        JsonNode pedido;
         try {
-            String artesao = consultasCommerce.consultarPedido(pedidoId, tokenComprador).path("artesaoId").asString();
-            return artesao.isBlank() ? null : UUID.fromString(artesao);
+            pedido = consultasCommerce.consultarPedido(pedidoId, tokenComprador);
         } catch (HttpClientErrorException.NotFound naoEncontrado) {
             throw new RecursoNaoEncontradoException("PEDIDO_NAO_ENCONTRADO", "Pedido não encontrado.");
         } catch (HttpClientErrorException.Forbidden semPermissao) {
             throw new AcessoNegadoException("Este pedido não pertence a você.");
         } catch (RestClientException | RespostaIncompativelException | IllegalArgumentException indisponivel) {
+            throw commerceIndisponivel();
+        }
+        if (!ESTADOS_QUE_ACEITAM_MEDIACAO.contains(pedido.path("estado").asString())) {
+            throw new ConflitoException("PEDIDO_SEM_MEDIACAO",
+                    "A mediação só pode ser aberta depois que o pagamento do pedido é confirmado.");
+        }
+        try {
+            String artesao = pedido.path("artesaoId").asString();
+            return artesao.isBlank() ? null : UUID.fromString(artesao);
+        } catch (IllegalArgumentException respostaInvalida) {
             throw commerceIndisponivel();
         }
     }

@@ -1,6 +1,7 @@
 package br.com.balaio.community.mediacao.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
@@ -20,6 +21,7 @@ import com.sun.net.httpserver.HttpServer;
 
 import br.com.balaio.community.mediacao.application.port.out.PedidosCommercePort.FalhaNaEntregaException;
 import br.com.balaio.community.mediacao.domain.DecisaoMediacao;
+import br.com.balaio.community.shared.exception.ConflitoException;
 import br.com.balaio.community.shared.exception.ServicoIndisponivelException;
 import br.com.balaio.community.shared.integration.ConsultasCommerceClient;
 
@@ -107,10 +109,22 @@ class PedidosCommerceHttpAdapterTest {
         UUID pedido = UUID.randomUUID();
         UUID artesao = UUID.randomUUID();
         var adapter = adapterRespondendo(200,
-                "{\"dados\":{\"id\":\"" + pedido + "\",\"artesaoId\":\"" + artesao + "\"},\"erro\":null}", 0);
+                "{\"dados\":{\"id\":\"" + pedido + "\",\"artesaoId\":\"" + artesao + "\",\"estado\":\"producao\"},\"erro\":null}", 0);
 
         assertThat(adapter.confirmarCompradorDoPedido(pedido, "token-comprador")).isEqualTo(artesao);
         assertThat(requisicaoRecebida.get()).startsWith("GET /api/v1/pedidos/" + pedido + " ");
+    }
+
+    @Test
+    void pedidoSemPagamentoConfirmadoNaoAceitaMediacao() throws IOException {
+        UUID pedido = UUID.randomUUID();
+        var adapter = adapterRespondendo(200,
+                "{\"dados\":{\"id\":\"" + pedido + "\",\"artesaoId\":\"" + UUID.randomUUID()
+                        + "\",\"estado\":\"falha_pagamento\"},\"erro\":null}", 0);
+
+        var recusa = catchThrowableOfType(ConflitoException.class,
+                () -> adapter.confirmarCompradorDoPedido(pedido, "token-comprador"));
+        assertThat(recusa.codigo()).isEqualTo("PEDIDO_SEM_MEDIACAO");
     }
 
     @Test
