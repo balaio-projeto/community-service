@@ -295,6 +295,159 @@ class MediacaoServiceTest {
         verify(commerce, never()).aplicarDecisao(any(), any(), any());
     }
 
+    @Test
+    void compradorDesisteDaPropriaMediacaoAbertaSemConsultarCommerce() {
+        UUID comprador = UUID.randomUUID();
+        var mediacao = mediacoes.abrir(abertura(UUID.randomUUID(), comprador));
+
+        var cancelada = mediacoes.cancelar(mediacao.id(), compradorAutenticado(comprador));
+
+        assertThat(cancelada.estado()).isEqualTo(EstadoMediacao.CANCELADA);
+        assertThat(cancelada.canceladaPor()).isEqualTo(comprador);
+        assertThat(cancelada.canceladaEm()).isEqualTo(OffsetDateTime.now(RELOGIO));
+        assertThat(repositorio.buscar(mediacao.id()).orElseThrow().estaCancelada()).isTrue();
+        verify(commerce, times(1)).confirmarCompradorDoPedido(any(), any());
+        verify(commerce, never()).aplicarDecisao(any(), any(), any());
+    }
+
+    @Test
+    void administradorEncerraSemDecisaoUmaMediacaoEmAnalise() {
+        UUID admin = UUID.randomUUID();
+        var mediacao = mediacoes.abrir(abertura(UUID.randomUUID(), UUID.randomUUID()));
+        mediacoes.iniciarAnalise(mediacao.id());
+
+        var cancelada = mediacoes.cancelar(mediacao.id(), new UsuarioAutenticado(admin, Papel.ADMIN, "token-admin"));
+
+        assertThat(cancelada.estado()).isEqualTo(EstadoMediacao.CANCELADA);
+        assertThat(cancelada.canceladaPor()).isEqualTo(admin);
+        assertThat(cancelada.decisao()).isNull();
+    }
+
+    @Test
+    void outroCompradorNaoEnxergaAMediacaoParaCancelar() {
+        var mediacao = mediacoes.abrir(abertura(UUID.randomUUID(), UUID.randomUUID()));
+
+        assertThatThrownBy(() -> mediacoes.cancelar(mediacao.id(), compradorAutenticado(UUID.randomUUID())))
+                .isInstanceOf(RecursoNaoEncontradoException.class);
+        assertThat(repositorio.buscar(mediacao.id()).orElseThrow().estado()).isEqualTo(EstadoMediacao.ABERTA);
+    }
+
+    @Test
+    void artesaoVendedorNaoCancelaMediacaoAbertaPeloComprador() {
+        UUID artesao = UUID.randomUUID();
+        UUID pedido = UUID.randomUUID();
+        when(commerce.confirmarCompradorDoPedido(pedido, TOKEN)).thenReturn(artesao);
+        var mediacao = mediacoes.abrir(abertura(pedido, UUID.randomUUID()));
+
+        assertThatThrownBy(() -> mediacoes.cancelar(mediacao.id(), artesaoAutenticado(artesao)))
+                .isInstanceOf(RecursoNaoEncontradoException.class);
+        assertThat(repositorio.buscar(mediacao.id()).orElseThrow().estado()).isEqualTo(EstadoMediacao.ABERTA);
+    }
+
+    @Test
+    void organizadorNaoCancelaMediacao() {
+        var mediacao = mediacoes.abrir(abertura(UUID.randomUUID(), UUID.randomUUID()));
+        var organizador = new UsuarioAutenticado(UUID.randomUUID(), Papel.ORGANIZADOR, "token-organizador");
+
+        assertThatThrownBy(() -> mediacoes.cancelar(mediacao.id(), organizador))
+                .isInstanceOf(AcessoNegadoException.class);
+    }
+
+    @Test
+    void artesaoQueComprouAbreECancelaAPropriaMediacao() {
+        UUID artesaoComprador = UUID.randomUUID();
+        UUID compra = UUID.randomUUID();
+        when(commerce.confirmarCompradorDoPedido(compra, TOKEN)).thenReturn(UUID.randomUUID());
+        var mediacao = mediacoes.abrir(abertura(compra, artesaoComprador));
+
+        var cancelada = mediacoes.cancelar(mediacao.id(), artesaoAutenticado(artesaoComprador));
+
+        assertThat(cancelada.estado()).isEqualTo(EstadoMediacao.CANCELADA);
+        assertThat(cancelada.canceladaPor()).isEqualTo(artesaoComprador);
+    }
+
+    @Test
+    void artesaoListaNumaSoPaginaAsMediacoesDasComprasEDasVendasSemDuplicar() {
+        UUID artesao = UUID.randomUUID();
+        UUID venda = UUID.randomUUID();
+        UUID compra = UUID.randomUUID();
+        UUID pedidoDeTerceiros = UUID.randomUUID();
+        when(commerce.confirmarCompradorDoPedido(venda, TOKEN)).thenReturn(artesao);
+        when(commerce.confirmarCompradorDoPedido(compra, TOKEN)).thenReturn(UUID.randomUUID());
+        when(commerce.confirmarCompradorDoPedido(pedidoDeTerceiros, TOKEN)).thenReturn(UUID.randomUUID());
+        mediacoes.abrir(abertura(venda, UUID.randomUUID()));
+        mediacoes.abrir(abertura(compra, artesao));
+        mediacoes.abrir(abertura(pedidoDeTerceiros, UUID.randomUUID()));
+
+        var lista = mediacoes.listarDoArtesao(artesaoAutenticado(artesao), Pagina.primeira());
+
+        assertThat(lista).extracting(Mediacao::pedidoId).containsExactlyInAnyOrder(venda, compra);
+        assertThat(lista).extracting(Mediacao::id).doesNotHaveDuplicates();
+        assertThat(mediacoes.listarDoArtesao(artesaoAutenticado(artesao), Pagina.de(0, 1))).hasSize(1);
+        assertThat(mediacoes.listarDoArtesao(artesaoAutenticado(artesao), Pagina.de(1, 1))).hasSize(1);
+        assertThat(mediacoes.listarDoArtesao(artesaoAutenticado(artesao), Pagina.de(2, 1))).isEmpty();
+    }
+
+    @Test
+    void cancelarMediacaoJaDecididaGeraConflito() {
+        var mediacao = mediacaoDecidida(UUID.randomUUID());
+        var admin = new UsuarioAutenticado(UUID.randomUUID(), Papel.ADMIN, "token-admin");
+
+        assertThatThrownBy(() -> mediacoes.cancelar(mediacao.id(), admin)).isInstanceOf(ConflitoException.class);
+        assertThatThrownBy(() -> mediacoes.cancelar(mediacao.id(), compradorAutenticado(mediacao.compradorId())))
+                .isInstanceOf(ConflitoException.class);
+        assertThat(repositorio.buscar(mediacao.id()).orElseThrow().estado())
+                .isEqualTo(EstadoMediacao.DECISAO_PENDENTE);
+    }
+
+    @Test
+    void cancelarMediacaoInexistenteRetornaNaoEncontrada() {
+        var admin = new UsuarioAutenticado(UUID.randomUUID(), Papel.ADMIN, "token-admin");
+
+        assertThatThrownBy(() -> mediacoes.cancelar(UUID.randomUUID(), admin))
+                .isInstanceOf(RecursoNaoEncontradoException.class);
+    }
+
+    @Test
+    void cancelarDeNovoDevolveAMesmaMediacaoCancelada() {
+        UUID comprador = UUID.randomUUID();
+        var mediacao = mediacoes.abrir(abertura(UUID.randomUUID(), comprador));
+        var primeira = mediacoes.cancelar(mediacao.id(), compradorAutenticado(comprador));
+
+        var repetida = mediacoes.cancelar(mediacao.id(),
+                new UsuarioAutenticado(UUID.randomUUID(), Papel.ADMIN, "token-admin"));
+
+        assertThat(repetida.estado()).isEqualTo(EstadoMediacao.CANCELADA);
+        assertThat(repetida.canceladaPor()).isEqualTo(comprador);
+        assertThat(repetida.canceladaEm()).isEqualTo(primeira.canceladaEm());
+    }
+
+    @Test
+    void canceladaSomeDasListagensEPedidoAceitaNovaMediacao() {
+        UUID comprador = UUID.randomUUID();
+        UUID artesao = UUID.randomUUID();
+        UUID pedido = UUID.randomUUID();
+        when(commerce.confirmarCompradorDoPedido(pedido, TOKEN)).thenReturn(artesao);
+        var primeira = mediacoes.abrir(abertura(pedido, comprador));
+        mediacoes.cancelar(primeira.id(), compradorAutenticado(comprador));
+
+        assertThat(mediacoes.listarDoComprador(comprador, Pagina.primeira())).isEmpty();
+        assertThat(mediacoes.listarDoArtesao(artesaoAutenticado(artesao), Pagina.primeira())).isEmpty();
+        assertThat(mediacoes.listarTodas(Pagina.primeira())).isEmpty();
+
+        var nova = mediacoes.abrir(abertura(pedido, comprador));
+
+        assertThat(nova.id()).isNotEqualTo(primeira.id());
+        assertThat(nova.estado()).isEqualTo(EstadoMediacao.ABERTA);
+        assertThat(mediacoes.listarDoComprador(comprador, Pagina.primeira())).extracting(Mediacao::id)
+                .containsExactly(nova.id());
+        assertThatThrownBy(() -> mediacoes.abrir(abertura(pedido, comprador))).isInstanceOf(ConflitoException.class);
+    }
+
+    private static UsuarioAutenticado compradorAutenticado(UUID comprador) {
+        return new UsuarioAutenticado(comprador, Papel.COMPRADOR, TOKEN);
+    }
+
     private Mediacao mediacaoDecidida(UUID pedido) {
         var mediacao = mediacoes.abrir(abertura(pedido, UUID.randomUUID()));
         mediacoes.iniciarAnalise(mediacao.id());

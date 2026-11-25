@@ -18,6 +18,17 @@ public record UsuarioAutenticado(UUID id, Papel papel, String token) {
         return this;
     }
 
+    public boolean podeComprar() {
+        return papel != null && papel.podeComprar();
+    }
+
+    public UsuarioAutenticado exigirQuemCompra() {
+        if (!podeComprar()) {
+            throw new AcessoNegadoException();
+        }
+        return this;
+    }
+
     public String slugArtesao() {
         return PREFIXO_SLUG_ARTESAO + id;
     }

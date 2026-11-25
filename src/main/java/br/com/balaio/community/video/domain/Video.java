@@ -28,6 +28,7 @@ public final class Video {
     private ArquivoMidia capa;
     private OffsetDateTime publicadoEm;
     private final long visualizacoes;
+    private SuspensaoVideo suspensao;
 
     private Video(Dados dados) {
         this.id = dados.id();
@@ -42,12 +43,13 @@ public final class Video {
         this.capa = dados.capa();
         this.publicadoEm = dados.publicadoEm();
         this.visualizacoes = dados.visualizacoes();
+        this.suspensao = dados.suspensao();
     }
 
     public static Video rascunho(UUID artesaoId, String pecaSlug, String legenda, List<String> etiquetas,
             String duracao, OffsetDateTime agora) {
         return new Video(new Dados(UUID.randomUUID(), artesaoId, agora, pecaSlug, legendaValida(legenda),
-                etiquetasValidas(etiquetas), duracaoValida(duracao), SituacaoVideo.RASCUNHO, null, null, null, 0));
+                etiquetasValidas(etiquetas), duracaoValida(duracao), SituacaoVideo.RASCUNHO, null, null, null, 0, null));
     }
 
     public static Video reconstituir(Dados dados) {
@@ -92,7 +94,32 @@ public final class Video {
     }
 
     public boolean visivelPara(UUID usuarioId) {
-        return situacao == SituacaoVideo.PUBLICADA || pertenceA(usuarioId);
+        return visivelAoPublico() || pertenceA(usuarioId);
+    }
+
+    public boolean visivelAoPublico() {
+        return situacao == SituacaoVideo.PUBLICADA && !suspenso();
+    }
+
+    public boolean suspenso() {
+        return suspensao != null;
+    }
+
+    public SuspensaoVideo suspender(String motivo, UUID administrador, OffsetDateTime agora) {
+        if (suspenso()) {
+            throw new ConflitoException("VIDEO_JA_SUSPENSO", "Este vídeo já está suspenso.");
+        }
+        suspensao = SuspensaoVideo.nova(motivo, administrador, agora);
+        return suspensao;
+    }
+
+    public SuspensaoVideo reativar() {
+        if (!suspenso()) {
+            throw new ConflitoException("VIDEO_NAO_SUSPENSO", "Este vídeo não está suspenso.");
+        }
+        var encerrada = suspensao;
+        suspensao = null;
+        return encerrada;
     }
 
     public UUID id() { return id; }
@@ -107,9 +134,10 @@ public final class Video {
     public ArquivoMidia capa() { return capa; }
     public OffsetDateTime publicadoEm() { return publicadoEm; }
     public long visualizacoes() { return visualizacoes; }
+    public SuspensaoVideo suspensao() { return suspensao; }
 
     public boolean contaVisualizacaoDe(UUID espectadorId) {
-        return situacao == SituacaoVideo.PUBLICADA && !pertenceA(espectadorId);
+        return visivelAoPublico() && !pertenceA(espectadorId);
     }
 
     private static String legendaValida(String legenda) {
@@ -149,6 +177,6 @@ public final class Video {
 
     public record Dados(UUID id, UUID artesaoId, OffsetDateTime criadoEm, String pecaSlug, String legenda,
             List<String> etiquetas, String duracao, SituacaoVideo situacao, ArquivoMidia arquivo, ArquivoMidia capa,
-            OffsetDateTime publicadoEm, long visualizacoes) {
+            OffsetDateTime publicadoEm, long visualizacoes, SuspensaoVideo suspensao) {
     }
 }

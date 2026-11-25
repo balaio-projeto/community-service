@@ -45,10 +45,10 @@ public class MediacoesController {
     }
 
     @PostMapping
-    @Operation(summary = "Comprador abre uma mediação para um pedido próprio")
+    @Operation(summary = "Quem compra (comprador ou artesão) abre uma mediação para um pedido próprio")
     public ResponseEntity<ApiResponse<MediacaoResponse>> abrir(@RequestBody MediacaoRequests.Abertura corpo,
             UsuarioAutenticado usuario) {
-        usuario.exigirPapel(Papel.COMPRADOR);
+        usuario.exigirQuemCompra();
         var mediacao = mediacoes.abrir(new AberturaMediacao(corpo.pedido(), usuario.id(), corpo.assunto(),
                 corpo.relato(), usuario.token()));
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -56,8 +56,8 @@ public class MediacoesController {
     }
 
     @GetMapping
-    @Operation(summary = "Comprador vê as próprias mediações; artesão vê, sem poder decidir, as dos pedidos dele; "
-            + "administrador vê todas (paginado)")
+    @Operation(summary = "Comprador vê as próprias mediações; artesão vê as das próprias compras e, sem poder "
+            + "decidir, as dos pedidos dele; administrador vê todas (paginado)")
     public ApiResponse<List<MediacaoResponse>> listar(@RequestParam(defaultValue = "0") int pagina,
             @RequestParam(defaultValue = "" + Pagina.TAMANHO_PADRAO) int tamanho, UsuarioAutenticado usuario) {
         var trecho = Pagina.de(pagina, tamanho);
@@ -67,7 +67,8 @@ public class MediacoesController {
         }
         if (usuario.possuiPapel(Papel.ARTESAO)) {
             return ApiResponse.sucesso(mediacoes.listarDoArtesao(usuario, trecho).stream()
-                    .map(MediacaoResponse::paraArtesao).toList());
+                    .map(mediacao -> mediacao.abertaPor(usuario.id()) ? MediacaoResponse.paraComprador(mediacao)
+                            : MediacaoResponse.paraArtesao(mediacao)).toList());
         }
         usuario.exigirPapel(Papel.ADMIN);
         return ApiResponse.sucesso(mediacoes.listarTodas(trecho).stream()
@@ -100,6 +101,15 @@ public class MediacoesController {
             UsuarioAutenticado usuario) {
         usuario.exigirPapel(Papel.ADMIN);
         return respostaDeEntrega(entregas.reprocessar(id));
+    }
+
+    @PostMapping("/{id}/cancelamento")
+    @Operation(summary = "Comprador desiste da própria mediação ou administrador a encerra sem decisão, "
+            + "enquanto aberta ou em análise; repetir devolve a mediação já cancelada")
+    public ApiResponse<MediacaoResponse> cancelar(@PathVariable UUID id, UsuarioAutenticado usuario) {
+        var cancelada = mediacoes.cancelar(id, usuario);
+        return ApiResponse.sucesso(usuario.possuiPapel(Papel.ADMIN) ? MediacaoResponse.paraAdministrador(cancelada)
+                : MediacaoResponse.paraComprador(cancelada));
     }
 
     private static ResponseEntity<ApiResponse<MediacaoResponse>> respostaDeEntrega(Mediacao atual) {

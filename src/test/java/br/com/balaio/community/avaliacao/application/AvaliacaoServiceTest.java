@@ -65,11 +65,35 @@ class AvaliacaoServiceTest {
     }
 
     @Test
-    void artesaoNaoAvaliaPedido() {
+    void artesaoVendedorNaoAvaliaOPedidoQueVendeu() {
         var artesao = new UsuarioAutenticado(artesaoId, Papel.ARTESAO, "t");
 
         assertThatThrownBy(() -> avaliacoes.avaliar(pedidoId, CINCO_ESTRELAS, artesao))
-                .isInstanceOf(AcessoNegadoException.class);
+                .isInstanceOf(RecursoNaoEncontradoException.class);
+        assertThat(avaliacoes.reputacaoDoArtesao("artesao-" + artesaoId).total()).isZero();
+    }
+
+    @Test
+    void artesaoAvaliaACompraQueFezDeOutroAtelie() {
+        var artesaoComprador = new UsuarioAutenticado(UUID.randomUUID(), Papel.ARTESAO, "token-artesao");
+        UUID compra = UUID.randomUUID();
+        when(pedidos.buscarDoComprador(compra, "token-artesao"))
+                .thenReturn(new PedidoAvaliavel(compra, artesaoComprador.id(), artesaoId, "cesto", "entregue"));
+
+        avaliacoes.avaliar(compra, CINCO_ESTRELAS, artesaoComprador);
+
+        assertThat(avaliacoes.consultarDoPedido(compra, artesaoComprador).nota()).isEqualTo(5);
+        assertThat(avaliacoes.reputacaoDoArtesao("artesao-" + artesaoId).total()).isEqualTo(1);
+    }
+
+    @Test
+    void organizadorEAdminNaoAvaliamPedido() {
+        for (var papel : List.of(Papel.ORGANIZADOR, Papel.ADMIN)) {
+            var usuario = new UsuarioAutenticado(UUID.randomUUID(), papel, "t");
+
+            assertThatThrownBy(() -> avaliacoes.avaliar(pedidoId, CINCO_ESTRELAS, usuario))
+                    .isInstanceOf(AcessoNegadoException.class);
+        }
         verifyNoInteractions(pedidos);
     }
 

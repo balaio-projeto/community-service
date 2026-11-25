@@ -13,7 +13,6 @@ import br.com.balaio.community.avaliacao.application.port.out.PedidosAvaliaveisP
 import br.com.balaio.community.avaliacao.domain.Avaliacao;
 import br.com.balaio.community.avaliacao.domain.Reputacao;
 import br.com.balaio.community.shared.exception.RecursoNaoEncontradoException;
-import br.com.balaio.community.shared.security.Papel;
 import br.com.balaio.community.shared.security.UsuarioAutenticado;
 
 @Service
@@ -29,7 +28,7 @@ public class AvaliacaoService {
     }
 
     public Avaliacao avaliar(UUID pedidoId, NovaAvaliacao nova, UsuarioAutenticado comprador) {
-        comprador.exigirPapel(Papel.COMPRADOR);
+        comprador.exigirQuemCompra();
         if (avaliacoes.existeParaPedido(pedidoId)) {
             throw Avaliacao.pedidoNaoAvaliavel();
         }

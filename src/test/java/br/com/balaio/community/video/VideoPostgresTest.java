@@ -3,6 +3,8 @@ package br.com.balaio.community.video;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayInputStream;
@@ -38,12 +40,15 @@ import br.com.balaio.community.shared.paginacao.Pagina;
 import br.com.balaio.community.shared.security.Papel;
 import br.com.balaio.community.shared.security.UsuarioAutenticado;
 import br.com.balaio.community.shared.servicos.CatalogoPort;
+import br.com.balaio.community.shared.servicos.NotificacoesPort;
 import br.com.balaio.community.shared.servicos.PerfilPort;
 import br.com.balaio.community.video.application.ComentarioVideoService;
+import br.com.balaio.community.video.application.ModeracaoVideoService;
 import br.com.balaio.community.video.application.VideoService;
 import br.com.balaio.community.video.application.VideoService.DadosVideo;
 import br.com.balaio.community.video.application.VideoService.EnvioMidia;
 import br.com.balaio.community.video.application.port.out.VideosPort;
+import br.com.balaio.community.video.domain.FiltroModeracaoVideo;
 import br.com.balaio.community.video.domain.TipoMidia;
 
 @EnabledIfEnvironmentVariable(named = "COMMUNITY_POSTGRES_TEST", matches = "true")
@@ -74,6 +79,8 @@ class VideoPostgresTest {
     @MockitoBean CatalogoPort catalogo;
     @MockitoBean PerfilPort perfis;
     @MockitoBean JwtDecoder decoder;
+    @MockitoBean NotificacoesPort notificacoes;
+    @Autowired ModeracaoVideoService moderacao;
 
     @Test
     void fluxoCompletoDeRascunhoUploadPublicacaoComentarioERemocao() throws Exception {
@@ -132,5 +139,46 @@ class VideoPostgresTest {
         })).isInstanceOf(OptimisticLockingFailureException.class);
 
         assertThat(repositorio.buscar(id).orElseThrow().legenda()).isEqualTo("Vencedora");
+    }
+
+    @Test
+    void suspensaoPersisteMotivoAutorEDataETiraOVideoDoPublicoAteAReativacao() {
+        var artesao = new UsuarioAutenticado(UUID.randomUUID(), Papel.ARTESAO, "a");
+        var administrador = new UsuarioAutenticado(UUID.randomUUID(), Papel.ADMIN, "adm");
+        when(catalogo.buscar(any(), any())).thenReturn(Optional.empty());
+        UUID id = videos.criar(new DadosVideo("Torno de oleiro", List.of("barro"), null, null, null), artesao)
+                .video().id();
+        videos.enviarMidia(id, new EnvioMidia(TipoMidia.VIDEO, "video/mp4", 4,
+                new ByteArrayInputStream(new byte[] { 0, 0, 0, 24 }), "0:30"), artesao);
+        videos.alterar(id, new DadosVideo(null, null, null, null, "publicada"), artesao);
+
+        moderacao.suspender(id, "Conteúdo de terceiros sem autorização.", administrador);
+
+        var persistido = repositorio.buscar(id).orElseThrow();
+        assertThat(persistido.suspensao().motivo()).isEqualTo("Conteúdo de terceiros sem autorização.");
+        assertThat(persistido.suspensao().suspensoPor()).isEqualTo(administrador.id());
+        assertThat(persistido.suspensao().suspensoEm()).isNotNull();
+        assertThat(videos.listar(false, Optional.empty(), Pagina.primeira())).extracting(v -> v.video().id())
+                .doesNotContain(id);
+        assertThatThrownBy(() -> videos.consultar(id, Optional.empty()))
+                .isInstanceOf(RecursoNaoEncontradoException.class);
+        assertThat(videos.listar(true, Optional.of(artesao), Pagina.primeira())).extracting(v -> v.video().id())
+                .containsExactly(id);
+        assertThat(moderacao.listar(FiltroModeracaoVideo.SUSPENSOS, Pagina.primeira(), administrador))
+                .extracting(v -> v.id()).contains(id);
+        assertThat(moderacao.listar(FiltroModeracaoVideo.PUBLICADOS, Pagina.primeira(), administrador))
+                .extracting(v -> v.id()).doesNotContain(id);
+        assertThat(moderacao.listar(FiltroModeracaoVideo.TODOS, Pagina.primeira(), administrador))
+                .extracting(v -> v.id()).contains(id);
+
+        videos.alterar(id, new DadosVideo("Torno de oleiro, versão autoral", null, null, null, null), artesao);
+        assertThat(repositorio.buscar(id).orElseThrow().suspenso()).isTrue();
+
+        moderacao.reativar(id, administrador);
+
+        assertThat(repositorio.buscar(id).orElseThrow().suspensao()).isNull();
+        assertThat(videos.listar(false, Optional.empty(), Pagina.primeira())).extracting(v -> v.video().id())
+                .contains(id);
+        verify(notificacoes, times(2)).notificar(any());
     }
 }

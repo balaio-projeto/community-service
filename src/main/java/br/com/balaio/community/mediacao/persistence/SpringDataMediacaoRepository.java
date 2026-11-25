@@ -16,15 +16,25 @@ import org.springframework.transaction.annotation.Transactional;
 import jakarta.persistence.LockModeType;
 
 interface SpringDataMediacaoRepository extends JpaRepository<MediacaoJpaEntity, UUID> {
-    boolean existsByPedidoId(UUID pedidoId);
+    boolean existsByPedidoIdAndEstadoNot(UUID pedidoId, String estado);
 
-    List<MediacaoJpaEntity> findAllByOrderByCriadaEmDesc(Pageable pagina);
+    List<MediacaoJpaEntity> findByEstadoNotOrderByCriadaEmDesc(String estado, Pageable pagina);
 
-    List<MediacaoJpaEntity> findByCompradorIdOrderByCriadaEmDesc(UUID compradorId, Pageable pagina);
+    List<MediacaoJpaEntity> findByCompradorIdAndEstadoNotOrderByCriadaEmDesc(UUID compradorId, String estado,
+            Pageable pagina);
 
-    List<MediacaoJpaEntity> findByArtesaoIdOrderByCriadaEmDesc(UUID artesaoId, Pageable pagina);
+    List<MediacaoJpaEntity> findByArtesaoIdAndEstadoNotOrderByCriadaEmDesc(UUID artesaoId, String estado,
+            Pageable pagina);
 
-    boolean existsByArtesaoIdIsNull();
+    @Query("""
+            select m from MediacaoJpaEntity m
+            where m.estado <> :cancelada and (m.compradorId = :conta or m.artesaoId = :conta)
+            order by m.criadaEm desc, m.id desc
+            """)
+    List<MediacaoJpaEntity> listarComoCompradorOuArtesao(@Param("conta") UUID contaId,
+            @Param("cancelada") String cancelada, Pageable pagina);
+
+    boolean existsByArtesaoIdIsNullAndEstadoNot(String estado);
 
     @Transactional
     @Modifying

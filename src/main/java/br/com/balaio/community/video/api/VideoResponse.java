@@ -10,7 +10,7 @@ import br.com.balaio.community.video.domain.SituacaoVideo;
 
 public record VideoResponse(UUID id, String artesao, String peca, String legenda, List<String> etiquetas,
         String duracao, long visualizacoes, long curtidas, long comentarios, String publicadoEm, String capa,
-        String url, String situacao) {
+        String url, String situacao, SuspensaoResponse suspensao) {
 
     private static final DateTimeFormatter FORMATO_DATA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final String ROTULO_RASCUNHO = "Rascunho";
@@ -26,6 +26,7 @@ public record VideoResponse(UUID id, String artesao, String peca, String legenda
                         ? ROTULO_RASCUNHO : video.publicadoEm().format(FORMATO_DATA),
                 video.capa() == null ? null : base + "/capa",
                 video.arquivo() == null ? null : base + "/arquivo",
-                video.situacao().codigo());
+                video.situacao().codigo(),
+                SuspensaoResponse.de(video.suspensao()));
     }
 }

@@ -25,6 +25,8 @@ public interface MediacoesPort {
 
     List<Mediacao> listarDoArtesao(UUID artesaoId, Pagina pagina);
 
+    List<Mediacao> listarComoCompradorOuArtesao(UUID contaId, Pagina pagina);
+
     boolean existemSemArtesao();
 
     void vincularArtesao(UUID artesaoId, Collection<UUID> pedidosDoArtesao);

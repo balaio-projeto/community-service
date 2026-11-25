@@ -17,7 +17,7 @@ class MediacoesEmMemoria implements MediacoesPort {
 
     @Override
     public boolean existeParaPedido(UUID pedidoId) {
-        return armazenadas.values().stream().anyMatch(dados -> dados.pedidoId().equals(pedidoId));
+        return ativas().stream().anyMatch(mediacao -> mediacao.pedidoId().equals(pedidoId));
     }
 
     @Override
@@ -43,23 +43,29 @@ class MediacoesEmMemoria implements MediacoesPort {
 
     @Override
     public List<Mediacao> listarTodas(Pagina pagina) {
-        return paginar(todas(), pagina);
+        return paginar(ativas(), pagina);
     }
 
     @Override
     public List<Mediacao> listarDoComprador(UUID compradorId, Pagina pagina) {
-        return paginar(todas().stream().filter(mediacao -> mediacao.compradorId().equals(compradorId)).toList(),
+        return paginar(ativas().stream().filter(mediacao -> mediacao.compradorId().equals(compradorId)).toList(),
                 pagina);
     }
 
     @Override
     public List<Mediacao> listarDoArtesao(UUID artesaoId, Pagina pagina) {
-        return paginar(todas().stream().filter(mediacao -> artesaoId.equals(mediacao.artesaoId())).toList(), pagina);
+        return paginar(ativas().stream().filter(mediacao -> artesaoId.equals(mediacao.artesaoId())).toList(), pagina);
+    }
+
+    @Override
+    public List<Mediacao> listarComoCompradorOuArtesao(UUID contaId, Pagina pagina) {
+        return paginar(ativas().stream().filter(mediacao -> contaId.equals(mediacao.compradorId())
+                || contaId.equals(mediacao.artesaoId())).toList(), pagina);
     }
 
     @Override
     public boolean existemSemArtesao() {
-        return armazenadas.values().stream().anyMatch(dados -> dados.artesaoId() == null);
+        return ativas().stream().anyMatch(mediacao -> mediacao.artesaoId() == null);
     }
 
     @Override
@@ -79,6 +85,10 @@ class MediacoesEmMemoria implements MediacoesPort {
                 .sorted(Comparator.comparing(Mediacao::criadaEm).reversed()).toList();
     }
 
+    private List<Mediacao> ativas() {
+        return todas().stream().filter(mediacao -> !mediacao.estaCancelada()).toList();
+    }
+
     private static List<Mediacao> paginar(List<Mediacao> lista, Pagina pagina) {
         return lista.stream().skip(pagina.deslocamento()).limit(pagina.tamanho()).toList();
     }
@@ -91,6 +101,6 @@ class MediacoesEmMemoria implements MediacoesPort {
         return new Mediacao.Dados(mediacao.id(), mediacao.pedidoId(), mediacao.compradorId(), mediacao.artesaoId(),
                 mediacao.assunto(), mediacao.relato(), mediacao.estado(), mediacao.decisao(), mediacao.decisaoId(),
                 mediacao.tentativasEntrega(), mediacao.ultimoErroEntrega(), mediacao.criadaEm(),
-                mediacao.atualizadaEm());
+                mediacao.atualizadaEm(), mediacao.canceladaPor(), mediacao.canceladaEm());
     }
 }

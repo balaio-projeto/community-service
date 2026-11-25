@@ -55,7 +55,7 @@ public class MediacaoService {
         if (mediacoes.existemSemArtesao()) {
             mediacoes.vincularArtesao(artesao.id(), pedidos.pedidosVendidosPeloArtesao(artesao.token()));
         }
-        return mediacoes.listarDoArtesao(artesao.id(), pagina);
+        return mediacoes.listarComoCompradorOuArtesao(artesao.id(), pagina);
     }
 
     @Transactional(readOnly = true)
@@ -74,6 +74,23 @@ public class MediacaoService {
     public Mediacao registrarDecisao(UUID id, DecisaoMediacao decisao) {
         var mediacao = bloquear(id);
         mediacao.registrarDecisao(decisao, agora());
+        return mediacoes.atualizar(mediacao);
+    }
+
+    @Transactional
+    public Mediacao cancelar(UUID id, UsuarioAutenticado usuario) {
+        var administrador = usuario.possuiPapel(Papel.ADMIN);
+        if (!administrador) {
+            usuario.exigirQuemCompra();
+        }
+        var mediacao = bloquear(id);
+        if (!administrador && !mediacao.abertaPor(usuario.id())) {
+            throw naoEncontrada();
+        }
+        if (mediacao.estaCancelada()) {
+            return mediacao;
+        }
+        mediacao.cancelar(usuario.id(), agora());
         return mediacoes.atualizar(mediacao);
     }
 

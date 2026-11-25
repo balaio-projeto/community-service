@@ -41,7 +41,17 @@ public class VideosController {
     private final VideoService videos;
     private final ComentarioVideoService comentarios;
 
-    public VideosController(VideoService videos, ComentarioVideoService comentarios) {
+    private final br.com.balaio.community.shared.servicos.PerfilPort perfis;
+
+    private List<ComentarioResponse> comFotos(List<br.com.balaio.community.video.domain.ComentarioVideo> lista) {
+        var imagens = perfis.imagensDasContas(lista.stream()
+                .map(br.com.balaio.community.video.domain.ComentarioVideo::autorId).toList());
+        return lista.stream().map(comentario -> ComentarioResponse.de(comentario, imagens)).toList();
+    }
+
+    public VideosController(VideoService videos, ComentarioVideoService comentarios,
+            br.com.balaio.community.shared.servicos.PerfilPort perfis) {
+        this.perfis = perfis;
         this.videos = videos;
         this.comentarios = comentarios;
     }
@@ -127,7 +137,7 @@ public class VideosController {
     @Operation(summary = "Comentários do vídeo visível")
     public ApiResponse<List<ComentarioResponse>> comentarios(@PathVariable UUID id,
             Optional<UsuarioAutenticado> usuario) {
-        return ApiResponse.sucesso(comentarios.listar(id, usuario).stream().map(ComentarioResponse::de).toList());
+        return ApiResponse.sucesso(comFotos(comentarios.listar(id, usuario)));
     }
 
     @PostMapping("/{id}/comentarios")
@@ -135,7 +145,7 @@ public class VideosController {
     public ResponseEntity<ApiResponse<ComentarioResponse>> comentar(@PathVariable UUID id,
             @RequestBody NovoComentarioRequest corpo, UsuarioAutenticado usuario) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.sucesso(
-                ComentarioResponse.de(comentarios.comentar(id, corpo.texto(), usuario))));
+                comFotos(List.of(comentarios.comentar(id, corpo.texto(), usuario))).getFirst()));
     }
 
     private static EnvioMidia envio(TipoMidia tipo, HttpServletRequest requisicao, String duracao)

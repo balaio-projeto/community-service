@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import br.com.balaio.community.shared.paginacao.Pagina;
 import br.com.balaio.community.video.application.port.out.VideosPort;
+import br.com.balaio.community.video.domain.FiltroModeracaoVideo;
 import br.com.balaio.community.video.domain.SituacaoVideo;
 import br.com.balaio.community.video.domain.Video;
 
@@ -34,8 +35,18 @@ class VideosPersistenceAdapter implements VideosPort {
 
     @Override
     public List<Video> listarPublicados(Pagina pagina) {
-        return repositorio.findBySituacaoOrderByPublicadoEmDesc(SituacaoVideo.PUBLICADA.codigo(), paginacao(pagina))
-                .stream().map(VideoJpaEntity::paraDominio).toList();
+        return paraDominio(repositorio.findBySituacaoAndSuspensoEmIsNullOrderByPublicadoEmDesc(
+                SituacaoVideo.PUBLICADA.codigo(), paginacao(pagina)));
+    }
+
+    @Override
+    public List<Video> listarParaModeracao(FiltroModeracaoVideo filtro, Pagina pagina) {
+        return paraDominio(switch (filtro) {
+            case TODOS -> repositorio.listarPublicadosOuSuspensos(SituacaoVideo.PUBLICADA.codigo(), paginacao(pagina));
+            case PUBLICADOS -> repositorio.findBySituacaoAndSuspensoEmIsNullOrderByPublicadoEmDesc(
+                    SituacaoVideo.PUBLICADA.codigo(), paginacao(pagina));
+            case SUSPENSOS -> repositorio.findBySuspensoEmIsNotNullOrderBySuspensoEmDesc(paginacao(pagina));
+        });
     }
 
     @Override
@@ -53,6 +64,10 @@ class VideosPersistenceAdapter implements VideosPort {
     @Override
     public void registrarVisualizacao(UUID id) {
         repositorio.somarVisualizacao(id);
+    }
+
+    private static List<Video> paraDominio(List<VideoJpaEntity> entidades) {
+        return entidades.stream().map(VideoJpaEntity::paraDominio).toList();
     }
 
     private static PageRequest paginacao(Pagina pagina) {

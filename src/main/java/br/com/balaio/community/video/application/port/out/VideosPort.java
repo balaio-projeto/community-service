@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import br.com.balaio.community.shared.paginacao.Pagina;
+import br.com.balaio.community.video.domain.FiltroModeracaoVideo;
 import br.com.balaio.community.video.domain.Video;
 
 public interface VideosPort {
@@ -15,6 +16,8 @@ public interface VideosPort {
     List<Video> listarPublicados(Pagina pagina);
 
     List<Video> listarDoArtesao(UUID artesaoId, Pagina pagina);
+
+    List<Video> listarParaModeracao(FiltroModeracaoVideo filtro, Pagina pagina);
 
     void remover(UUID id);
 

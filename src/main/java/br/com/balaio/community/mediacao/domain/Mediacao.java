@@ -23,6 +23,8 @@ public final class Mediacao {
     private int tentativasEntrega;
     private String ultimoErroEntrega;
     private OffsetDateTime atualizadaEm;
+    private UUID canceladaPor;
+    private OffsetDateTime canceladaEm;
 
     private Mediacao(Dados dados) {
         this.id = dados.id();
@@ -38,6 +40,8 @@ public final class Mediacao {
         this.tentativasEntrega = dados.tentativasEntrega();
         this.ultimoErroEntrega = dados.ultimoErroEntrega();
         this.atualizadaEm = dados.atualizadaEm();
+        this.canceladaPor = dados.canceladaPor();
+        this.canceladaEm = dados.canceladaEm();
     }
 
     public static Mediacao abrir(UUID pedidoId, UUID compradorId, String assunto, String relato,
@@ -47,12 +51,12 @@ public final class Mediacao {
             throw new RequisicaoInvalidaException("Informe pedido, assunto e relato.");
         }
         return new Mediacao(new Dados(UUID.randomUUID(), pedidoId, compradorId, null, assunto.strip(),
-                relato.strip(), EstadoMediacao.ABERTA, null, null, 0, null, agora, agora));
+                relato.strip(), EstadoMediacao.ABERTA, null, null, 0, null, agora, agora, null, null));
     }
 
     public Mediacao doArtesao(UUID artesaoDoPedido) {
         return new Mediacao(new Dados(id, pedidoId, compradorId, artesaoDoPedido, assunto, relato, estado, decisao,
-                decisaoId, tentativasEntrega, ultimoErroEntrega, criadaEm, atualizadaEm));
+                decisaoId, tentativasEntrega, ultimoErroEntrega, criadaEm, atualizadaEm, canceladaPor, canceladaEm));
     }
 
     public static Mediacao reconstituir(Dados dados) {
@@ -74,10 +78,35 @@ public final class Mediacao {
         if (decisao != null) {
             throw new ConflitoException("MEDIACAO_CONFLITANTE", "Outra decisão já foi registrada.");
         }
+        if (!estado.aceitaAnalise()) {
+            throw new ConflitoException("MEDIACAO_CONFLITANTE", "Mediação cancelada não pode ser decidida.");
+        }
         decisao = escolhida;
         decisaoId = UUID.randomUUID();
         estado = EstadoMediacao.DECISAO_PENDENTE;
         atualizadaEm = agora;
+    }
+
+    public void cancelar(UUID autor, OffsetDateTime agora) {
+        if (estaCancelada()) {
+            return;
+        }
+        if (!estado.aceitaCancelamento()) {
+            throw new ConflitoException("MEDIACAO_CONFLITANTE",
+                    "Só é possível cancelar uma mediação aberta ou em análise.");
+        }
+        estado = EstadoMediacao.CANCELADA;
+        canceladaPor = autor;
+        canceladaEm = agora;
+        atualizadaEm = agora;
+    }
+
+    public boolean estaCancelada() {
+        return estado == EstadoMediacao.CANCELADA;
+    }
+
+    public boolean abertaPor(UUID usuarioId) {
+        return compradorId.equals(usuarioId);
     }
 
     public boolean aguardaEntregaDaDecisao() {
@@ -135,6 +164,8 @@ public final class Mediacao {
     public int tentativasEntrega() { return tentativasEntrega; }
     public String ultimoErroEntrega() { return ultimoErroEntrega; }
     public OffsetDateTime atualizadaEm() { return atualizadaEm; }
+    public UUID canceladaPor() { return canceladaPor; }
+    public OffsetDateTime canceladaEm() { return canceladaEm; }
 
     private static boolean estaVazio(String texto) {
         return texto == null || texto.isBlank();
@@ -142,6 +173,7 @@ public final class Mediacao {
 
     public record Dados(UUID id, UUID pedidoId, UUID compradorId, UUID artesaoId, String assunto, String relato,
             EstadoMediacao estado, DecisaoMediacao decisao, UUID decisaoId, int tentativasEntrega,
-            String ultimoErroEntrega, OffsetDateTime criadaEm, OffsetDateTime atualizadaEm) {
+            String ultimoErroEntrega, OffsetDateTime criadaEm, OffsetDateTime atualizadaEm, UUID canceladaPor,
+            OffsetDateTime canceladaEm) {
     }
 }
