@@ -110,6 +110,40 @@ class ConversasControllerTest {
                 .andExpect(jsonPath("$.dados[0].naoLida").value(false));
     }
 
+    @Test
+    void conversaIdentificaOPedidoUmaUnicaVezPeloCodigoCurtoEMostraOComprador() throws Exception {
+        var id = UUID.fromString("54789ff6-4b76-40fe-a515-9935204d9e93");
+        var pedido = new PedidoDaConversa(id, "Ana Souza", "14/11/2026", "/api/v1/arquivos/perfis/ana.webp");
+        when(conversas.conversasDoArtesao(any()))
+                .thenReturn(List.of(new ResumoConversa(pedido, Optional.empty(), false)));
+
+        var corpo = mvc.perform(get("/api/v1/artesao/conversas").with(usuario("artesao")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dados[0].id").value(id.toString()))
+                .andExpect(jsonPath("$.dados[0].codigo").value("#54789FF6"))
+                .andExpect(jsonPath("$.dados[0].assunto").value("Pedido #54789FF6"))
+                .andExpect(jsonPath("$.dados[0].pessoa").value("Ana Souza"))
+                .andExpect(jsonPath("$.dados[0].retrato").value("/api/v1/arquivos/perfis/ana.webp"))
+                .andExpect(jsonPath("$.dados[0].comprador.nome").value("Ana Souza"))
+                .andExpect(jsonPath("$.dados[0].comprador.imagem").value("/api/v1/arquivos/perfis/ana.webp"))
+                .andReturn().getResponse().getContentAsString();
+        org.assertj.core.api.Assertions.assertThat(corpo.split(id.toString(), -1)).hasSize(2);
+        org.assertj.core.api.Assertions.assertThat(corpo).doesNotContain("email");
+    }
+
+    @Test
+    void compradorSemPerfilDisponivelApareceComoCompradorSemFoto() throws Exception {
+        var pedido = new PedidoDaConversa(UUID.randomUUID(), null, "14/11/2026", null);
+        when(conversas.conversasDoArtesao(any()))
+                .thenReturn(List.of(new ResumoConversa(pedido, Optional.empty(), false)));
+
+        mvc.perform(get("/api/v1/artesao/conversas").with(usuario("artesao")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dados[0].pessoa").value("Comprador"))
+                .andExpect(jsonPath("$.dados[0].comprador.nome").isEmpty())
+                .andExpect(jsonPath("$.dados[0].retrato").isEmpty());
+    }
+
     private static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors
             .JwtRequestPostProcessor usuario(String papel) {
         return jwt().jwt(token -> token.subject(UUID.randomUUID().toString()).claim("papel", papel));

@@ -34,6 +34,9 @@ import br.com.balaio.community.mediacao.application.MediacaoService;
 import br.com.balaio.community.mediacao.domain.DecisaoMediacao;
 import br.com.balaio.community.mediacao.domain.Mediacao;
 import br.com.balaio.community.shared.config.WebConfig;
+import br.com.balaio.community.shared.exception.AcessoNegadoException;
+import br.com.balaio.community.shared.exception.ConflitoException;
+import br.com.balaio.community.shared.exception.RecursoNaoEncontradoException;
 import br.com.balaio.community.shared.paginacao.Pagina;
 import br.com.balaio.community.shared.security.Papel;
 import br.com.balaio.community.shared.security.SecurityConfig;
@@ -60,12 +63,43 @@ class MediacoesControllerTest {
     }
 
     @Test
-    void artesaoNaoAbreMediacao() throws Exception {
-        mvc.perform(post(URL).with(usuario("artesao")).contentType(MediaType.APPLICATION_JSON)
-                        .content(corpoAbertura(UUID.randomUUID())))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.erro.codigo").value("SEM_PERMISSAO"));
+    void organizadorEAdminNaoAbremMediacao() throws Exception {
+        for (String papel : List.of("organizador", "admin")) {
+            mvc.perform(post(URL).with(usuario(papel)).contentType(MediaType.APPLICATION_JSON)
+                            .content(corpoAbertura(UUID.randomUUID())))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.erro.codigo").value("SEM_PERMISSAO"));
+        }
         verifyNoInteractions(mediacoes);
+    }
+
+    @Test
+    void artesaoAbreMediacaoDaPropriaCompra() throws Exception {
+        UUID artesao = UUID.randomUUID();
+        UUID pedido = UUID.randomUUID();
+        when(mediacoes.abrir(any())).thenReturn(mediacao(pedido, artesao));
+
+        mvc.perform(post(URL).with(usuario("artesao", artesao)).contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoAbertura(pedido)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.dados.compradorId").value(artesao.toString()));
+        verify(mediacoes).abrir(eq(new AberturaMediacao(pedido, artesao, "Peça quebrada", "Chegou trincada.",
+                "token")));
+    }
+
+    @Test
+    void artesaoListaComprasEVendasNumaSoLista() throws Exception {
+        UUID artesao = UUID.randomUUID();
+        var daCompra = mediacao(UUID.randomUUID(), artesao);
+        var daVenda = mediacao(UUID.randomUUID(), UUID.randomUUID());
+        when(mediacoes.listarDoArtesao(any(), eq(Pagina.primeira()))).thenReturn(List.of(daCompra, daVenda));
+
+        mvc.perform(get(URL).with(usuario("artesao", artesao)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dados.length()").value(2))
+                .andExpect(jsonPath("$.dados[0].compradorId").value(artesao.toString()))
+                .andExpect(jsonPath("$.dados[1].pedido").value(daVenda.pedidoId().toString()));
+        verify(mediacoes, never()).listarDoComprador(any(), any());
     }
 
     @Test
@@ -209,6 +243,91 @@ class MediacoesControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{\"decisao\":\"apagar\"}"))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(mediacoes);
+    }
+
+    @Test
+    void compradorDesisteDaMediacaoERecebeEstadoCancelado() throws Exception {
+        UUID comprador = UUID.randomUUID();
+        var mediacao = mediacao(UUID.randomUUID(), comprador);
+        mediacao.cancelar(comprador, CRIADA_EM);
+        when(mediacoes.cancelar(eq(mediacao.id()), any())).thenReturn(mediacao);
+
+        mvc.perform(post(URL + "/" + mediacao.id() + "/cancelamento").with(usuario("comprador", comprador)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dados.estado").value("cancelada"))
+                .andExpect(jsonPath("$.dados.cancelada").value(true))
+                .andExpect(jsonPath("$.dados.emAnalise").value(false))
+                .andExpect(jsonPath("$.dados.canceladaEm").value("14/11/2026"))
+                .andExpect(jsonPath("$.erro").isEmpty());
+        verify(mediacoes).cancelar(mediacao.id(), new UsuarioAutenticado(comprador, Papel.COMPRADOR, "token"));
+        verifyNoInteractions(entregas);
+    }
+
+    @Test
+    void administradorEncerraSemDecisao() throws Exception {
+        UUID admin = UUID.randomUUID();
+        var mediacao = mediacao(UUID.randomUUID(), UUID.randomUUID());
+        mediacao.iniciarAnalise(CRIADA_EM);
+        mediacao.cancelar(admin, CRIADA_EM);
+        when(mediacoes.cancelar(eq(mediacao.id()), any())).thenReturn(mediacao);
+
+        mvc.perform(post(URL + "/" + mediacao.id() + "/cancelamento").with(usuario("admin", admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dados.estado").value("cancelada"))
+                .andExpect(jsonPath("$.dados.decisao").isEmpty());
+        verify(mediacoes).cancelar(mediacao.id(), new UsuarioAutenticado(admin, Papel.ADMIN, "token"));
+    }
+
+    @Test
+    void cancelamentoDeMediacaoDeOutroCompradorRetorna404() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(mediacoes.cancelar(eq(id), any())).thenThrow(new RecursoNaoEncontradoException(
+                "MEDIACAO_NAO_ENCONTRADA", "Mediação não encontrada."));
+
+        mvc.perform(post(URL + "/" + id + "/cancelamento").with(usuario("comprador")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.erro.codigo").value("MEDIACAO_NAO_ENCONTRADA"));
+    }
+
+    @Test
+    void cancelamentoForaDeAbertaOuEmAnaliseRetorna409() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(mediacoes.cancelar(eq(id), any())).thenThrow(new ConflitoException("MEDIACAO_CONFLITANTE",
+                "Só é possível cancelar uma mediação aberta ou em análise."));
+
+        mvc.perform(post(URL + "/" + id + "/cancelamento").with(usuario("admin")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.erro.codigo").value("MEDIACAO_CONFLITANTE"));
+    }
+
+    @Test
+    void artesaoNaoCancelaMediacaoAlheia() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(mediacoes.cancelar(eq(id), any())).thenThrow(new AcessoNegadoException());
+
+        mvc.perform(post(URL + "/" + id + "/cancelamento").with(usuario("artesao")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.erro.codigo").value("SEM_PERMISSAO"));
+    }
+
+    @Test
+    void cancelamentoSemTokenRetorna401() throws Exception {
+        mvc.perform(post(URL + "/" + UUID.randomUUID() + "/cancelamento"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(mediacoes);
+    }
+
+    @Test
+    void mediacaoDecididaContinuaMarcadaComoEmAnalise() throws Exception {
+        var mediacao = mediacao(UUID.randomUUID(), UUID.randomUUID());
+        mediacao.registrarDecisao(DecisaoMediacao.NEGAR, CRIADA_EM);
+        mediacao.confirmarEntregaDaDecisao(CRIADA_EM);
+        when(mediacoes.listarTodas(Pagina.primeira())).thenReturn(List.of(mediacao));
+
+        mvc.perform(get(URL).with(usuario("admin")))
+                .andExpect(jsonPath("$.dados[0].emAnalise").value(true))
+                .andExpect(jsonPath("$.dados[0].cancelada").value(false))
+                .andExpect(jsonPath("$.dados[0].canceladaEm").isEmpty());
     }
 
     @Test

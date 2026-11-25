@@ -85,14 +85,22 @@ public class ConversasController {
         }
     }
 
-    public record ConversaArtesaoResponse(UUID id, String pessoa, String assunto, String previa, String quando,
-            boolean naoLida, String retrato) {
+    public record ConversaArtesaoResponse(UUID id, String codigo, String pessoa, String assunto, String previa,
+            String quando, boolean naoLida, String retrato, CompradorResponse comprador) {
+        private static final String PESSOA_PADRAO = "Comprador";
+
         static ConversaArtesaoResponse de(ResumoConversa resumo) {
             var pedido = resumo.pedido();
-            return new ConversaArtesaoResponse(pedido.id(), pedido.compradorNome(), "Pedido " + pedido.id(),
+            String nome = pedido.compradorNome() == null || pedido.compradorNome().isBlank()
+                    ? null : pedido.compradorNome();
+            return new ConversaArtesaoResponse(pedido.id(), pedido.codigo(), nome == null ? PESSOA_PADRAO : nome,
+                    "Pedido " + pedido.codigo(),
                     resumo.ultimaMensagem().map(Mensagem::texto).orElse(ResumoConversa.PREVIA_SEM_MENSAGENS),
                     resumo.ultimaMensagem().map(mensagem -> horaLocal(mensagem.enviadaEm())).orElse(pedido.data()),
-                    resumo.naoLida(), null);
+                    resumo.naoLida(), pedido.compradorImagem(), new CompradorResponse(nome, pedido.compradorImagem()));
         }
+    }
+
+    public record CompradorResponse(String nome, String imagem) {
     }
 }

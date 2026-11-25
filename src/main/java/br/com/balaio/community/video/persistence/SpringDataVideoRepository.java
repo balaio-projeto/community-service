@@ -10,7 +10,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 interface SpringDataVideoRepository extends JpaRepository<VideoJpaEntity, UUID> {
-    List<VideoJpaEntity> findBySituacaoOrderByPublicadoEmDesc(String situacao, Pageable pagina);
+    List<VideoJpaEntity> findBySituacaoAndSuspensoEmIsNullOrderByPublicadoEmDesc(String situacao, Pageable pagina);
+
+    List<VideoJpaEntity> findBySuspensoEmIsNotNullOrderBySuspensoEmDesc(Pageable pagina);
+
+    @Query("select v from VideoJpaEntity v where v.situacao = :publicada or v.suspensoEm is not null "
+            + "order by v.criadoEm desc, v.id")
+    List<VideoJpaEntity> listarPublicadosOuSuspensos(@Param("publicada") String publicada, Pageable pagina);
 
     List<VideoJpaEntity> findByArtesaoIdOrderByCriadoEmDesc(UUID artesaoId, Pageable pagina);
 

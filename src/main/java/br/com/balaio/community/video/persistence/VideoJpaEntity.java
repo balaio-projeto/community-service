@@ -21,6 +21,7 @@ import org.hibernate.annotations.BatchSize;
 import br.com.balaio.community.shared.paginacao.Pagina;
 import br.com.balaio.community.video.domain.ArquivoMidia;
 import br.com.balaio.community.video.domain.SituacaoVideo;
+import br.com.balaio.community.video.domain.SuspensaoVideo;
 import br.com.balaio.community.video.domain.Video;
 
 @Entity
@@ -78,6 +79,15 @@ class VideoJpaEntity {
     @Column(insertable = false, updatable = false)
     private long visualizacoes;
 
+    @Column(name = "suspenso_motivo", length = SuspensaoVideo.TAMANHO_MAXIMO_MOTIVO)
+    private String suspensoMotivo;
+
+    @Column(name = "suspenso_por")
+    private UUID suspensoPor;
+
+    @Column(name = "suspenso_em")
+    private OffsetDateTime suspensoEm;
+
     @Version
     private Long versao;
 
@@ -107,12 +117,17 @@ class VideoJpaEntity {
         capaTipo = video.capa() == null ? null : video.capa().tipoConteudo();
         capaTamanho = video.capa() == null ? null : video.capa().tamanhoBytes();
         publicadoEm = video.publicadoEm();
+        var suspensao = video.suspensao();
+        suspensoMotivo = suspensao == null ? null : suspensao.motivo();
+        suspensoPor = suspensao == null ? null : suspensao.suspensoPor();
+        suspensoEm = suspensao == null ? null : suspensao.suspensoEm();
     }
 
     Video paraDominio() {
         return Video.reconstituir(new Video.Dados(id, artesaoId, criadoEm, pecaSlug, legenda, etiquetas, duracao,
                 SituacaoVideo.deCodigo(situacao), arquivo(arquivoChave, arquivoTipo, arquivoTamanho),
-                arquivo(capaChave, capaTipo, capaTamanho), publicadoEm, visualizacoes));
+                arquivo(capaChave, capaTipo, capaTamanho), publicadoEm, visualizacoes,
+                suspensoEm == null ? null : new SuspensaoVideo(suspensoMotivo, suspensoPor, suspensoEm)));
     }
 
     private static ArquivoMidia arquivo(String chave, String tipo, Long tamanho) {

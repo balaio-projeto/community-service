@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -121,6 +122,26 @@ class MediacaoPostgresTest {
     }
 
     @Test
+    void artesaoQueTambemCompraListaComprasEVendasSemDuplicarEPaginando() {
+        UUID artesao = UUID.randomUUID();
+        UUID venda = UUID.randomUUID();
+        UUID compra = UUID.randomUUID();
+        when(commerce.confirmarCompradorDoPedido(venda, "token")).thenReturn(artesao);
+        when(commerce.confirmarCompradorDoPedido(compra, "token")).thenReturn(UUID.randomUUID());
+        mediacoes.abrir(new AberturaMediacao(venda, UUID.randomUUID(), "Ajuda", "Relato.", "token"));
+        mediacoes.abrir(new AberturaMediacao(compra, artesao, "Ajuda", "Relato.", "token"));
+
+        assertThat(mediacoes.listarDoArtesao(artesaoAutenticado(artesao), Pagina.primeira()))
+                .extracting(Mediacao::pedidoId).containsExactlyInAnyOrder(venda, compra);
+        var primeira = mediacoes.listarDoArtesao(artesaoAutenticado(artesao), Pagina.de(0, 1));
+        var segunda = mediacoes.listarDoArtesao(artesaoAutenticado(artesao), Pagina.de(1, 1));
+        assertThat(primeira).hasSize(1);
+        assertThat(segunda).hasSize(1);
+        assertThat(primeira.getFirst().id()).isNotEqualTo(segunda.getFirst().id());
+        assertThat(mediacoes.listarDoArtesao(artesaoAutenticado(artesao), Pagina.de(2, 1))).isEmpty();
+    }
+
+    @Test
     void mediacaoAnteriorAoVinculoDoArtesaoEhAssociadaPelasVendasDele() {
         UUID artesao = UUID.randomUUID();
         UUID pedidoAntigo = UUID.randomUUID();
@@ -139,6 +160,56 @@ class MediacaoPostgresTest {
 
     private static UsuarioAutenticado artesaoAutenticado(UUID artesao) {
         return new UsuarioAutenticado(artesao, Papel.ARTESAO, "token-artesao");
+    }
+
+    @Test
+    void cancelamentoPersisteAutorEPermiteNovaMediacaoNoMesmoPedido() {
+        UUID comprador = UUID.randomUUID();
+        UUID artesao = UUID.randomUUID();
+        UUID pedido = UUID.randomUUID();
+        when(commerce.confirmarCompradorDoPedido(pedido, "token")).thenReturn(artesao);
+        var primeira = mediacoes.abrir(new AberturaMediacao(pedido, comprador, "Ajuda", "Relato.", "token"));
+        mediacoes.iniciarAnalise(primeira.id());
+
+        var cancelada = mediacoes.cancelar(primeira.id(), new UsuarioAutenticado(comprador, Papel.COMPRADOR, "token"));
+
+        assertThat(cancelada.estado()).isEqualTo(EstadoMediacao.CANCELADA);
+        assertThat(jdbc.queryForObject("SELECT estado FROM mediacoes WHERE id = ?", String.class, primeira.id()))
+                .isEqualTo("cancelada");
+        assertThat(jdbc.queryForObject("SELECT cancelada_por FROM mediacoes WHERE id = ?", UUID.class, primeira.id()))
+                .isEqualTo(comprador);
+        assertThat(jdbc.queryForObject("SELECT cancelada_em IS NOT NULL FROM mediacoes WHERE id = ?", Boolean.class,
+                primeira.id())).isTrue();
+        assertThat(mediacoes.listarDoComprador(comprador, Pagina.primeira())).isEmpty();
+        assertThat(mediacoes.listarDoArtesao(artesaoAutenticado(artesao), Pagina.primeira())).isEmpty();
+        assertThat(mediacoes.listarTodas(Pagina.de(0, 100))).extracting(Mediacao::id).doesNotContain(primeira.id());
+
+        var nova = mediacoes.abrir(new AberturaMediacao(pedido, comprador, "De novo", "Relato.", "token"));
+
+        assertThat(nova.estado()).isEqualTo(EstadoMediacao.ABERTA);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM mediacoes WHERE pedido_id = ?", Integer.class, pedido))
+                .isEqualTo(2);
+        assertThat(mediacoes.listarDoComprador(comprador, Pagina.primeira())).extracting(Mediacao::id)
+                .containsExactly(nova.id());
+        assertThat(mediacoes.listarTodas(Pagina.de(0, 100))).extracting(Mediacao::id).contains(nova.id());
+        assertThat(mediacoes.cancelar(primeira.id(), new UsuarioAutenticado(UUID.randomUUID(), Papel.ADMIN, "t"))
+                .canceladaPor()).isEqualTo(comprador);
+    }
+
+    @Test
+    void indiceParcialRecusaDuasMediacoesAtivasNoMesmoPedidoMasAceitaCanceladas() {
+        UUID pedido = UUID.randomUUID();
+        var original = mediacoes.abrir(new AberturaMediacao(pedido, UUID.randomUUID(), "Ajuda", "Relato.", "token"));
+        String insercao = "INSERT INTO mediacoes (id, pedido_id, comprador_id, assunto, relato, estado) "
+                + "VALUES (?, ?, ?, 'Outra', 'Relato.', ?)";
+
+        jdbc.update(insercao, UUID.randomUUID(), pedido, UUID.randomUUID(), "cancelada");
+        jdbc.update(insercao, UUID.randomUUID(), pedido, UUID.randomUUID(), "cancelada");
+        assertThatThrownBy(() -> jdbc.update(insercao, UUID.randomUUID(), pedido, UUID.randomUUID(), "aberta"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        mediacoes.cancelar(original.id(), new UsuarioAutenticado(UUID.randomUUID(), Papel.ADMIN, "token"));
+        jdbc.update(insercao, UUID.randomUUID(), pedido, UUID.randomUUID(), "aberta");
     }
 
     @Test

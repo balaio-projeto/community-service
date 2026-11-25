@@ -7,7 +7,8 @@ public enum EstadoMediacao {
     EM_ANALISE("emAnalise"),
     DECISAO_PENDENTE("decisao_pendente"),
     DECIDIDA("decidida"),
-    FALHA_ENTREGA("falha_entrega");
+    FALHA_ENTREGA("falha_entrega"),
+    CANCELADA("cancelada");
 
     private final String codigo;
 
@@ -20,6 +21,10 @@ public enum EstadoMediacao {
     }
 
     public boolean aceitaAnalise() {
+        return this == ABERTA || this == EM_ANALISE;
+    }
+
+    public boolean aceitaCancelamento() {
         return this == ABERTA || this == EM_ANALISE;
     }
 

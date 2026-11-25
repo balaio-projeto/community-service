@@ -18,7 +18,7 @@ class MediacaoJpaEntity {
     @Id
     private UUID id;
 
-    @Column(name = "pedido_id", nullable = false, unique = true)
+    @Column(name = "pedido_id", nullable = false)
     private UUID pedidoId;
 
     @Column(name = "comprador_id", nullable = false)
@@ -54,6 +54,12 @@ class MediacaoJpaEntity {
     @Column(name = "atualizada_em", nullable = false)
     private OffsetDateTime atualizadaEm;
 
+    @Column(name = "cancelada_por")
+    private UUID canceladaPor;
+
+    @Column(name = "cancelada_em")
+    private OffsetDateTime canceladaEm;
+
     protected MediacaoJpaEntity() {
     }
 
@@ -77,11 +83,13 @@ class MediacaoJpaEntity {
         tentativas = mediacao.tentativasEntrega();
         ultimoErro = mediacao.ultimoErroEntrega();
         atualizadaEm = mediacao.atualizadaEm();
+        canceladaPor = mediacao.canceladaPor();
+        canceladaEm = mediacao.canceladaEm();
     }
 
     Mediacao paraDominio() {
         return Mediacao.reconstituir(new Mediacao.Dados(id, pedidoId, compradorId, artesaoId, assunto, relato,
                 EstadoMediacao.deCodigo(estado), decisao == null ? null : DecisaoMediacao.deCodigo(decisao),
-                decisaoId, tentativas, ultimoErro, criadaEm, atualizadaEm));
+                decisaoId, tentativas, ultimoErro, criadaEm, atualizadaEm, canceladaPor, canceladaEm));
     }
 }

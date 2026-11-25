@@ -23,15 +23,24 @@ import br.com.balaio.community.shared.api.ApiResponse;
 import br.com.balaio.community.shared.config.OpenApiConfig;
 import br.com.balaio.community.shared.paginacao.Pagina;
 import br.com.balaio.community.shared.security.UsuarioAutenticado;
+import br.com.balaio.community.shared.servicos.PerfilPort;
+import br.com.balaio.community.pergunta.domain.Pergunta;
 
 @RestController
 @RequestMapping("/api/v1/pecas/{slug}/perguntas")
 @Tag(name = "Perguntas", description = "Perguntas públicas sobre peças, respondidas pelo artesão dono")
 public class PerguntasController {
     private final PerguntaService perguntas;
+    private final PerfilPort perfis;
 
-    public PerguntasController(PerguntaService perguntas) {
+    public PerguntasController(PerguntaService perguntas, PerfilPort perfis) {
         this.perguntas = perguntas;
+        this.perfis = perfis;
+    }
+
+    private List<PerguntaResponse> comFotos(List<Pergunta> lista) {
+        var imagens = perfis.imagensDasContas(lista.stream().map(Pergunta::autorId).toList());
+        return lista.stream().map(pergunta -> PerguntaResponse.de(pergunta, imagens)).toList();
     }
 
     @GetMapping
@@ -39,8 +48,7 @@ public class PerguntasController {
     public ApiResponse<List<PerguntaResponse>> listar(@PathVariable String slug,
             @RequestParam(defaultValue = "0") int pagina,
             @RequestParam(defaultValue = "" + Pagina.TAMANHO_PADRAO) int tamanho) {
-        return ApiResponse.sucesso(perguntas.listarDaPeca(slug, Pagina.de(pagina, tamanho)).stream()
-                .map(PerguntaResponse::de).toList());
+        return ApiResponse.sucesso(comFotos(perguntas.listarDaPeca(slug, Pagina.de(pagina, tamanho))));
     }
 
     @PostMapping
@@ -49,7 +57,7 @@ public class PerguntasController {
     public ResponseEntity<ApiResponse<PerguntaResponse>> perguntar(@PathVariable String slug,
             @RequestBody NovaPerguntaRequest corpo, UsuarioAutenticado usuario) {
         var pergunta = perguntas.perguntar(slug, corpo.pergunta(), usuario);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.sucesso(PerguntaResponse.de(pergunta)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.sucesso(comFotos(List.of(pergunta)).getFirst()));
     }
 
     @PatchMapping("/{id}")
@@ -57,7 +65,7 @@ public class PerguntasController {
     @SecurityRequirement(name = OpenApiConfig.ESQUEMA_BEARER)
     public ApiResponse<PerguntaResponse> responder(@PathVariable String slug, @PathVariable UUID id,
             @RequestBody RespostaRequest corpo, UsuarioAutenticado usuario) {
-        return ApiResponse.sucesso(PerguntaResponse.de(perguntas.responder(slug, id, corpo.resposta(), usuario)));
+        return ApiResponse.sucesso(comFotos(List.of(perguntas.responder(slug, id, corpo.resposta(), usuario))).getFirst());
     }
 
     record NovaPerguntaRequest(String pergunta) {

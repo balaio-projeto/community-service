@@ -19,6 +19,10 @@ public enum Papel {
         return codigo;
     }
 
+    public boolean podeComprar() {
+        return this == COMPRADOR || this == ARTESAO;
+    }
+
     public static Optional<Papel> deCodigo(String codigo) {
         return Arrays.stream(values()).filter(papel -> papel.codigo.equals(codigo)).findFirst();
     }

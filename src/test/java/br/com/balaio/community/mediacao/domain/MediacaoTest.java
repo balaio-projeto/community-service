@@ -129,6 +129,83 @@ class MediacaoTest {
     }
 
     @Test
+    void cancelaMediacaoAbertaRegistrandoAutorEMomento() {
+        var mediacao = novaMediacao();
+        UUID autor = UUID.randomUUID();
+
+        mediacao.cancelar(autor, AGORA.plusHours(1));
+
+        assertThat(mediacao.estado()).isEqualTo(EstadoMediacao.CANCELADA);
+        assertThat(mediacao.estaCancelada()).isTrue();
+        assertThat(mediacao.canceladaPor()).isEqualTo(autor);
+        assertThat(mediacao.canceladaEm()).isEqualTo(AGORA.plusHours(1));
+        assertThat(mediacao.atualizadaEm()).isEqualTo(AGORA.plusHours(1));
+    }
+
+    @Test
+    void cancelaMediacaoEmAnalise() {
+        var mediacao = novaMediacao();
+        mediacao.iniciarAnalise(AGORA);
+
+        mediacao.cancelar(UUID.randomUUID(), AGORA);
+
+        assertThat(mediacao.estado()).isEqualTo(EstadoMediacao.CANCELADA);
+    }
+
+    @Test
+    void cancelarDeNovoNaoAlteraAutorNemMomento() {
+        var mediacao = novaMediacao();
+        UUID primeiroAutor = UUID.randomUUID();
+        mediacao.cancelar(primeiroAutor, AGORA);
+
+        mediacao.cancelar(UUID.randomUUID(), AGORA.plusDays(1));
+
+        assertThat(mediacao.canceladaPor()).isEqualTo(primeiroAutor);
+        assertThat(mediacao.canceladaEm()).isEqualTo(AGORA);
+    }
+
+    @Test
+    void naoCancelaDepoisDaDecisao() {
+        var pendente = novaMediacao();
+        pendente.registrarDecisao(DecisaoMediacao.NEGAR, AGORA);
+        var decidida = novaMediacao();
+        decidida.registrarDecisao(DecisaoMediacao.NEGAR, AGORA);
+        decidida.confirmarEntregaDaDecisao(AGORA);
+        var emFalha = novaMediacao();
+        emFalha.registrarDecisao(DecisaoMediacao.NEGAR, AGORA);
+        emFalha.registrarFalhaDefinitivaNaEntrega("HTTP 409", AGORA);
+
+        for (var mediacao : new Mediacao[] { pendente, decidida, emFalha }) {
+            var estadoAnterior = mediacao.estado();
+            assertThatThrownBy(() -> mediacao.cancelar(UUID.randomUUID(), AGORA))
+                    .isInstanceOf(ConflitoException.class);
+            assertThat(mediacao.estado()).isEqualTo(estadoAnterior);
+            assertThat(mediacao.canceladaPor()).isNull();
+        }
+    }
+
+    @Test
+    void mediacaoCanceladaNaoVaiParaAnaliseNemRecebeDecisao() {
+        var mediacao = novaMediacao();
+        mediacao.cancelar(UUID.randomUUID(), AGORA);
+
+        assertThatThrownBy(() -> mediacao.iniciarAnalise(AGORA)).isInstanceOf(ConflitoException.class);
+        assertThatThrownBy(() -> mediacao.registrarDecisao(DecisaoMediacao.NEGAR, AGORA))
+                .isInstanceOf(ConflitoException.class);
+        assertThat(mediacao.estado()).isEqualTo(EstadoMediacao.CANCELADA);
+        assertThat(mediacao.decisaoId()).isNull();
+    }
+
+    @Test
+    void identificaQuemAbriuAMediacao() {
+        UUID comprador = UUID.randomUUID();
+        var mediacao = Mediacao.abrir(UUID.randomUUID(), comprador, "Assunto", "Relato", AGORA);
+
+        assertThat(mediacao.abertaPor(comprador)).isTrue();
+        assertThat(mediacao.abertaPor(UUID.randomUUID())).isFalse();
+    }
+
+    @Test
     void codigoDeDecisaoDesconhecidoEhRequisicaoInvalida() {
         assertThatThrownBy(() -> DecisaoMediacao.deCodigo("reembolsar_tudo"))
                 .isInstanceOf(RequisicaoInvalidaException.class);

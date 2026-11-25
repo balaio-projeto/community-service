@@ -10,6 +10,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 import br.com.balaio.community.mediacao.application.port.out.MediacoesPort;
+import br.com.balaio.community.mediacao.domain.EstadoMediacao;
 import br.com.balaio.community.mediacao.domain.Mediacao;
 import br.com.balaio.community.shared.paginacao.Pagina;
 import br.com.balaio.community.shared.exception.ConflitoException;
@@ -17,6 +18,8 @@ import br.com.balaio.community.shared.exception.RecursoNaoEncontradoException;
 
 @Component
 class MediacoesPersistenceAdapter implements MediacoesPort {
+    private static final String CANCELADA = EstadoMediacao.CANCELADA.codigo();
+
     private final SpringDataMediacaoRepository repositorio;
 
     MediacoesPersistenceAdapter(SpringDataMediacaoRepository repositorio) {
@@ -25,7 +28,7 @@ class MediacoesPersistenceAdapter implements MediacoesPort {
 
     @Override
     public boolean existeParaPedido(UUID pedidoId) {
-        return repositorio.existsByPedidoId(pedidoId);
+        return repositorio.existsByPedidoIdAndEstadoNot(pedidoId, CANCELADA);
     }
 
     @Override
@@ -58,25 +61,31 @@ class MediacoesPersistenceAdapter implements MediacoesPort {
 
     @Override
     public List<Mediacao> listarTodas(Pagina pagina) {
-        return repositorio.findAllByOrderByCriadaEmDesc(paginacao(pagina)).stream()
+        return repositorio.findByEstadoNotOrderByCriadaEmDesc(CANCELADA, paginacao(pagina)).stream()
                 .map(MediacaoJpaEntity::paraDominio).toList();
     }
 
     @Override
     public List<Mediacao> listarDoComprador(UUID compradorId, Pagina pagina) {
-        return repositorio.findByCompradorIdOrderByCriadaEmDesc(compradorId, paginacao(pagina)).stream()
-                .map(MediacaoJpaEntity::paraDominio).toList();
+        return repositorio.findByCompradorIdAndEstadoNotOrderByCriadaEmDesc(compradorId, CANCELADA,
+                paginacao(pagina)).stream().map(MediacaoJpaEntity::paraDominio).toList();
     }
 
     @Override
     public List<Mediacao> listarDoArtesao(UUID artesaoId, Pagina pagina) {
-        return repositorio.findByArtesaoIdOrderByCriadaEmDesc(artesaoId, paginacao(pagina)).stream()
+        return repositorio.findByArtesaoIdAndEstadoNotOrderByCriadaEmDesc(artesaoId, CANCELADA,
+                paginacao(pagina)).stream().map(MediacaoJpaEntity::paraDominio).toList();
+    }
+
+    @Override
+    public List<Mediacao> listarComoCompradorOuArtesao(UUID contaId, Pagina pagina) {
+        return repositorio.listarComoCompradorOuArtesao(contaId, CANCELADA, paginacao(pagina)).stream()
                 .map(MediacaoJpaEntity::paraDominio).toList();
     }
 
     @Override
     public boolean existemSemArtesao() {
-        return repositorio.existsByArtesaoIdIsNull();
+        return repositorio.existsByArtesaoIdIsNullAndEstadoNot(CANCELADA);
     }
 
     @Override

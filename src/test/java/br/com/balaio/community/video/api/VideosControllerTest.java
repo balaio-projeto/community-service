@@ -65,6 +65,7 @@ class VideosControllerTest {
     @Autowired MockMvc mvc;
     @MockitoBean VideoService videos;
     @MockitoBean ComentarioVideoService comentarios;
+    @MockitoBean br.com.balaio.community.shared.servicos.PerfilPort perfis;
     @MockitoBean JwtDecoder decoder;
 
     @Test

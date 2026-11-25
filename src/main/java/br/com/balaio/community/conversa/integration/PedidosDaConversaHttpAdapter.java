@@ -36,7 +36,7 @@ class PedidosDaConversaHttpAdapter implements PedidosDaConversaPort {
 
     @Override
     public Optional<ParteDaConversa> parteNoPedido(UUID pedidoId, UsuarioAutenticado usuario) {
-        if (!usuario.possuiPapel(Papel.COMPRADOR) && !usuario.possuiPapel(Papel.ARTESAO))
+        if (!usuario.podeComprar() && !usuario.possuiPapel(Papel.ARTESAO))
             return Optional.empty();
         try {
             JsonNode partes = HttpClientes.dados(http.get()
@@ -45,8 +45,7 @@ class PedidosDaConversaHttpAdapter implements PedidosDaConversaPort {
                     .retrieve().body(JsonNode.class));
             UUID compradorId = UUID.fromString(partes.path("compradorId").asString());
             UUID artesaoId = UUID.fromString(partes.path("artesaoId").asString());
-            if (usuario.possuiPapel(Papel.COMPRADOR)
-                    && usuario.id().equals(compradorId))
+            if (usuario.podeComprar() && usuario.id().equals(compradorId))
                 return Optional.of(ParteDaConversa.COMPRADOR);
             if (usuario.possuiPapel(Papel.ARTESAO)
                     && usuario.id().equals(artesaoId))
@@ -66,12 +65,19 @@ class PedidosDaConversaHttpAdapter implements PedidosDaConversaPort {
                     .header(HttpHeaders.AUTHORIZATION, HttpClientes.bearer(artesao.token()))
                     .retrieve().body(JsonNode.class));
             return StreamSupport.stream(vendas.spliterator(), false)
-                    .map(venda -> new PedidoDaConversa(UUID.fromString(venda.path("id").asString()),
-                            venda.path("compradorNome").asString(), venda.path("data").asString()))
+                    .map(PedidosDaConversaHttpAdapter::pedidoDaVenda)
                     .toList();
         } catch (RestClientException | RespostaIncompativelException | IllegalArgumentException indisponivel) {
             throw commerceIndisponivel();
         }
+    }
+
+    private static PedidoDaConversa pedidoDaVenda(JsonNode venda) {
+        JsonNode comprador = venda.path("comprador");
+        String nome = comprador.isObject() ? comprador.path("nome").asString("") : venda.path("compradorNome").asString("");
+        String imagem = comprador.path("imagem").asString("");
+        return new PedidoDaConversa(UUID.fromString(venda.path("id").asString()), nome.isBlank() ? null : nome,
+                venda.path("data").asString(), imagem.isBlank() ? null : imagem);
     }
 
     private static ServicoIndisponivelException commerceIndisponivel() {

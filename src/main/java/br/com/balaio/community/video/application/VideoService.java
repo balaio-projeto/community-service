@@ -72,7 +72,7 @@ public class VideoService {
 
     @Transactional(readOnly = true)
     public VideoComNumeros consultar(UUID id, Optional<UsuarioAutenticado> usuario) {
-        return comNumeros(visivel(id, usuario));
+        return comNumeros(visivelOuEmModeracao(id, usuario));
     }
 
     public VideoComNumeros criar(DadosVideo dados, UsuarioAutenticado artesao) {
@@ -128,7 +128,7 @@ public class VideoService {
 
     @Transactional(readOnly = true)
     public MidiaParaEntrega abrirMidia(UUID id, TipoMidia tipo, Optional<UsuarioAutenticado> usuario) {
-        var video = visivel(id, usuario);
+        var video = visivelOuEmModeracao(id, usuario);
         var arquivo = Optional.ofNullable(tipo == TipoMidia.VIDEO ? video.arquivo() : video.capa())
                 .orElseThrow(VideoService::naoEncontrado);
         var conteudo = armazenamento.abrir(arquivo.chave()).orElseThrow(VideoService::naoEncontrado);
@@ -138,6 +138,13 @@ public class VideoService {
     Video visivel(UUID id, Optional<UsuarioAutenticado> usuario) {
         UUID leitor = usuario.map(UsuarioAutenticado::id).orElse(null);
         return videos.buscar(id).filter(video -> video.visivelPara(leitor)).orElseThrow(VideoService::naoEncontrado);
+    }
+
+    private Video visivelOuEmModeracao(UUID id, Optional<UsuarioAutenticado> usuario) {
+        if (usuario.filter(leitor -> leitor.possuiPapel(Papel.ADMIN)).isPresent()) {
+            return videos.buscar(id).orElseThrow(VideoService::naoEncontrado);
+        }
+        return visivel(id, usuario);
     }
 
     private VideoComNumeros anexarMidia(UUID id, ArquivoMidia novo, EnvioMidia envio, UsuarioAutenticado artesao) {

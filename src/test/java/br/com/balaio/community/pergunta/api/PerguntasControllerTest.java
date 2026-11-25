@@ -42,6 +42,7 @@ class PerguntasControllerTest {
 
     @Autowired MockMvc mvc;
     @MockitoBean PerguntaService perguntas;
+    @MockitoBean br.com.balaio.community.shared.servicos.PerfilPort perfis;
     @MockitoBean JwtDecoder decoder;
 
     @Test

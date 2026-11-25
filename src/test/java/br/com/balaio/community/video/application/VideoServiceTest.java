@@ -10,6 +10,7 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -34,6 +35,7 @@ import br.com.balaio.community.video.application.port.out.ArmazenamentoMidiaPort
 import br.com.balaio.community.video.application.port.out.ComentariosVideoPort;
 import br.com.balaio.community.video.application.port.out.InteracoesVideoPort;
 import br.com.balaio.community.video.application.port.out.VideosPort;
+import br.com.balaio.community.video.domain.FiltroModeracaoVideo;
 import br.com.balaio.community.video.domain.TipoMidia;
 import br.com.balaio.community.video.domain.Video;
 
@@ -42,6 +44,8 @@ class VideoServiceTest {
 
     private final UsuarioAutenticado artesao = new UsuarioAutenticado(UUID.randomUUID(), Papel.ARTESAO, "a");
     private final UsuarioAutenticado visitante = new UsuarioAutenticado(UUID.randomUUID(), Papel.COMPRADOR, "c");
+
+    private final UsuarioAutenticado administrador = new UsuarioAutenticado(UUID.randomUUID(), Papel.ADMIN, "adm");
 
     private VideosEmMemoria repositorio;
     private MidiasEmMemoria armazenamento;
@@ -123,6 +127,38 @@ class VideoServiceTest {
     }
 
     @Test
+    void videoSuspensoSaiDoPublicoMasFicaNoPainelDoDonoENoDetalheDoAdmin() {
+        UUID id = publicado();
+        suspender(id);
+
+        assertThat(videos.listar(false, Optional.empty(), Pagina.primeira())).isEmpty();
+        assertThatThrownBy(() -> videos.consultar(id, Optional.of(visitante)))
+                .isInstanceOf(RecursoNaoEncontradoException.class);
+        assertThatThrownBy(() -> videos.consultar(id, Optional.empty()))
+                .isInstanceOf(RecursoNaoEncontradoException.class);
+        assertThatThrownBy(() -> videos.registrarVisualizacao(id, Optional.of(visitante)))
+                .isInstanceOf(RecursoNaoEncontradoException.class);
+        assertThat(videos.listar(true, Optional.of(artesao), Pagina.primeira()))
+                .extracting(v -> v.video().suspenso()).containsExactly(true);
+        assertThat(videos.consultar(id, Optional.of(artesao)).video().suspensao().motivo())
+                .isEqualTo("Conteúdo de terceiros");
+        assertThat(videos.consultar(id, Optional.of(administrador)).video().id()).isEqualTo(id);
+    }
+
+    @Test
+    void donoEditaVideoSuspensoEEleContinuaForaDoPublico() {
+        UUID id = publicado();
+        suspender(id);
+
+        var alterado = videos.alterar(id, new DadosVideo("Legenda corrigida", List.of("barro"), null, null,
+                "publicada"), artesao);
+
+        assertThat(alterado.video().legenda()).isEqualTo("Legenda corrigida");
+        assertThat(alterado.video().suspenso()).isTrue();
+        assertThat(videos.listar(false, Optional.empty(), Pagina.primeira())).isEmpty();
+    }
+
+    @Test
     void listagemDoPainelRespeitaAPagina() {
         rascunho();
         rascunho();
@@ -133,6 +169,19 @@ class VideoServiceTest {
 
     private UUID rascunho() {
         return videos.criar(new DadosVideo("Asa do vaso", List.of(), null, null, null), artesao).video().id();
+    }
+
+    private UUID publicado() {
+        UUID id = rascunho();
+        enviarVideo(id);
+        videos.alterar(id, new DadosVideo(null, null, null, null, "publicada"), artesao);
+        return id;
+    }
+
+    private void suspender(UUID id) {
+        var video = repositorio.buscar(id).orElseThrow();
+        video.suspender("Conteúdo de terceiros", administrador.id(), OffsetDateTime.now(RELOGIO));
+        repositorio.salvar(video);
     }
 
     private VideoService.VideoComNumeros enviarVideo(UUID id) {
@@ -190,6 +239,11 @@ class VideoServiceTest {
         }
 
         @Override
+        public List<Video> listarParaModeracao(FiltroModeracaoVideo filtro, Pagina pagina) {
+            return paginar(armazenados.values().stream().filter(filtro::aceita).toList(), pagina);
+        }
+
+        @Override
         public void remover(UUID id) {
             armazenados.remove(id);
         }
@@ -206,7 +260,7 @@ class VideoServiceTest {
         private static Video copia(Video video) {
             return Video.reconstituir(new Video.Dados(video.id(), video.artesaoId(), video.criadoEm(),
                     video.pecaSlug(), video.legenda(), video.etiquetas(), video.duracao(), video.situacao(),
-                    video.arquivo(), video.capa(), video.publicadoEm(), video.visualizacoes()));
+                    video.arquivo(), video.capa(), video.publicadoEm(), video.visualizacoes(), video.suspensao()));
         }
     }
 
